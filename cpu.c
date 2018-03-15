@@ -28,7 +28,7 @@ void cpu_Reset(Cpu *pCpu){
 }
 
 void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *mem){
-	pCpu->sfr.reg[0] = (uint8_t*)&mem[MEM_IO_PORTS_OFFSET];
+	pCpu->sfr = (union Special_Register*)&mem[MEM_IO_PORTS_OFFSET];
 	return;
 }
 
@@ -38,7 +38,7 @@ void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *mem){
 
 	// TODO: Check for interrupt
 
-	// TODO: Get opcode
+	// TODO: Get opcode and arg
 	opcode = mem[pCpu->PC];
 	printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page0[opcode].mnemonic, page0[opcode].description);
 
