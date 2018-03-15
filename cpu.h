@@ -24,28 +24,27 @@ typedef struct{
 		union{
 			uint16_t BC;
 			struct{
-				uint8_t B;
 				uint8_t C;
+				uint8_t B;
 			};
 		};
 		union{
 			uint16_t DE;
 			struct{
-				uint8_t D;
 				uint8_t E;
+				uint8_t D;
 			};
 		};
 		union{
 			uint16_t HL;
 			struct{
-				uint8_t H;
 				uint8_t L;
+				uint8_t H;
 			};
 		};
 		union{
 			uint16_t AF;
 			struct{
-				uint8_t A;
 				union{
 					uint8_t F;
 					uint8_t FLAG;
@@ -65,12 +64,13 @@ typedef struct{
 						uint8_t zero : 1;
 					}STATUS_flags;
 				};
+				uint8_t A;
 			};
 		};
 	};
 	uint16_t SP; // decrements before putting something on the stack
 	uint16_t PC;
-	union Special_Register sfr;
+	union Special_Register *sfr;
 }Cpu;
 
 
