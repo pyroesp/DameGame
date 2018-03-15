@@ -16,7 +16,7 @@ int main(int argc, char *argv[]){
 	cpu = cpu_Init(mem);
 
 	for (i = 0; i < 5; i++)
-        printf("%02X  ", mem[i]);
+        printf("#%02X  ", mem[i]);
     printf("\n");
 
     cpu->B = 0xFF;
@@ -24,7 +24,16 @@ int main(int argc, char *argv[]){
 	cpu_Execute_Opcode(cpu, mem);
 	cpu_Execute_Opcode(cpu, mem);
 
-	printf("cpu->B = %02X\n", cpu->B); // result should be 0xFD
+	printf("cpu->B = #%02X\n", cpu->B); // result should be 0xFD
+	// Checking if double register have the correct endianess (reg B = MSB, reg C = LSB)
+	printf("cpu->BC = #%04X\n", cpu->BC);
+
+    // Checking if Special register and corresponding bits are correct
+	cpu->sfr->NR_50_bits.S01_volume = 0x4;
+	cpu->sfr->NR_50_bits.S02_output = 1;
+	cpu->sfr->NR_50_bits.S02_volume = 0x1;
+
+	printf("NR_50 = #%02X | address = $%04X\n", cpu->sfr->NR_50, &cpu->sfr->NR_50 - mem);
 
 	cpu_Free(cpu);
 	cpu = NULL;
