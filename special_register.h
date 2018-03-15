@@ -6,7 +6,7 @@ union Special_Register{
 	struct{
 		union{
 			uint8_t P1; /* Reading joypad */
-			union{
+			struct{
 				uint8_t P10 : 1;
 				uint8_t P11 : 1;
 				uint8_t P12 : 1;
@@ -20,7 +20,7 @@ union Special_Register{
 		uint8_t SB; /* Serial Transfer Data */
 		union{
 			uint8_t SC; /* SIO Control */
-			union{
+			struct{
 				uint8_t clock : 1;
 				uint8_t unused : 6;
 				uint8_t transfer_flag : 1;
@@ -31,7 +31,7 @@ union Special_Register{
 		uint8_t TMA; /* Timer Modulo */
 		union{
 			uint8_t TAC;
-			union{
+			struct{
 				uint8_t clock_select : 2;
 				uint8_t timer_stop : 1;
 				uint8_t unused : 5;
@@ -39,7 +39,7 @@ union Special_Register{
 		};
 		union{
 			uint8_t IF; /* Interrupt flag */
-			union{
+			struct{
 				uint8_t v_blank : 1;
 				uint8_t lcdc : 1;
 				uint8_t timer_overflow : 1;
@@ -50,7 +50,7 @@ union Special_Register{
 		};
 		union{
 			uint8_t NR_10;
-			union{
+			struct{
 				uint8_t sweep_shift : 3;
 				uint8_t sweep_inc_dec : 1;
 				uint8_t sweep_time : 3;
@@ -59,14 +59,14 @@ union Special_Register{
 		};
 		union{
 			uint8_t NR_11;
-			union{
+			struct{
 				uint8_t sound_len : 6;
 				uint8_t wave_patern_duty : 2;
 			}NR_11_bits;
 		};
 		union{
 			uint8_t NR_12;
-			union{
+			struct{
 				uint8_t envelope_sweep : 3;
 				uint8_t envelope : 1;
 				uint8_t envelope_volume : 4;
@@ -144,7 +144,10 @@ union Special_Register{
 				uint8_t unused1 : 1;
 			}NR_32_bits;
 		};
-		uint8_t NR_33;
+		union{
+			uint8_t NR_33;
+			uint8_t freq_lo_3
+		};
 		uint8_t NR_34;
 
 		uint8_t NR_41;
