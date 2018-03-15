@@ -1,1 +1,9 @@
 
+data/
+obj/
+bin/
+*.cbp
+*.layout
+*.depend
+*.sublime-project
+*.sublime-workspace
