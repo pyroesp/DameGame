@@ -1,5 +1,5 @@
 #include "cpu.h"
-#include "cpu_opcode.h"
+#include "opcode.h"
 
 Cpu* cpu_Init(uint8_t *mem){
 	Cpu *pCpu = NULL;
@@ -34,12 +34,20 @@ void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *mem){
 
 void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *mem){
 	uint8_t opcode = 0;
+	uint16_t arg_word;
+	uint8_t arg_byte;
 	uint8_t extended = 0;
 
 	// TODO: Check for interrupt
 
 	// TODO: Get opcode and arg
 	opcode = mem[pCpu->PC];
+	if (page0[opcode].size == 2)
+		arg_byte = mem[pCpu->PC + 1];
+	else if (page0[opcode].size == 3)
+		// Check endianess
+		arg_word = mem[pCpu->PC + 1] << 8 | mem[pCpu->PC + 2];
+
 	printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page0[opcode].mnemonic, page0[opcode].description);
 
 	if (page0[opcode].type == EXTENDED){ // opcode is 0xCB
@@ -304,17 +312,12 @@ void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *mem){
 	}
 
 
-	// TODO: Increase clock_cycle
+	// Increase clock_cycle and PC
 	if (extended){
 		pCpu->clock_cycle += page1[pCpu->PC + 1].clock_cycles;
-	}else{
-		pCpu->clock_cycle += page0[pCpu->PC].clock_cycles;
-	}
-
-	// TODO: Increase PC
-	if (extended){
 		pCpu->PC += page1[pCpu->PC + 1].size;
 	}else{
+		pCpu->clock_cycle += page0[pCpu->PC].clock_cycles;
 		pCpu->PC += page0[pCpu->PC].size;
 	}
 }
