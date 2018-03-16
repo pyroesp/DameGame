@@ -22,7 +22,6 @@ typedef struct{
 	const char *description;
 }Opcode;
 
-
 const Opcode page0[0x100] = {
 	{0x00, "NOP", 1, 4, NONE, "No Operation"},
 	{0x01, "LD BC, #%04X", 3, 12, IMMEDIATE, "Load #%04X to BC"},
