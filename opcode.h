@@ -299,14 +299,14 @@ const Opcode page0[0x100] = {
 
 // Extended instruction with 0xCB prefix
 const Opcode page1[0x100] = {
-	{0x00, "RLC B", 2, 8, NONE, "Rotate B Left to Carry"},
-	{0x01, "RLC C", 2, 8, NONE, "Rotate C Left to Carry"},
-	{0x02, "RLC D", 2, 8, NONE, "Rotate D Left to Carry"},
-	{0x03, "RLC E", 2, 8, NONE, "Rotate E Left to Carry"},
-	{0x04, "RLC H", 2, 8, NONE, "Rotate H Left to Carry"},
-	{0x05, "RLC L", 2, 8, NONE, "Rotate L Left to Carry"},
-	{0x06, "RLC (HL)", 2, 16, NONE, "Rotate (HL) Left to Carry"},
-	{0x07, "RLC A", 2, 8, NONE, "Rotate A Left to Carry"},
+	{0x00, "RLC B", 2, 8, NONE, "Rotate B Left with Carry"},
+	{0x01, "RLC C", 2, 8, NONE, "Rotate C Left with Carry"},
+	{0x02, "RLC D", 2, 8, NONE, "Rotate D Left with Carry"},
+	{0x03, "RLC E", 2, 8, NONE, "Rotate E Left with Carry"},
+	{0x04, "RLC H", 2, 8, NONE, "Rotate H Left with Carry"},
+	{0x05, "RLC L", 2, 8, NONE, "Rotate L Left with Carry"},
+	{0x06, "RLC (HL)", 2, 16, NONE, "Rotate (HL) Left with Carry"},
+	{0x07, "RLC A", 2, 8, NONE, "Rotate A Left with Carry"},
 	{0x08, "RRC B", 2, 8, NONE, "Rotate B Right with Carry"},
 	{0x09, "RRC C", 2, 8, NONE, "Rotate C Right with Carry"},
 	{0x0A, "RRC D", 2, 8, NONE, "Rotate D Right with Carry"},
