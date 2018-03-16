@@ -18,10 +18,6 @@ int main(int argc, char *argv[]){
 	Cpu *cpu = NULL;
 	cpu = cpu_Init(mem);
 
-	for (i = 0; i < 5; i++)
-        printf("#%02X  ", mem[i]);
-    printf("\n");
-
     cpu->B = 0xFF;
     cpu->C = 0xAB;
 	cpu_Execute_Opcode(cpu, mem); // NOP
@@ -33,8 +29,8 @@ int main(int argc, char *argv[]){
 	// Checking if double register have the correct endianness (reg B = MSB, reg C = LSB)
 	printf("cpu->BC = #%04X\n", cpu->BC);
 	// Checking if reg array is correctly aligned with the registers
-	printf("cpu->reg[B] = #%02X\n", *(cpu->reg[0]));
-	printf("cpu->reg[C] = #%02X\n", *(cpu->reg[1]));
+	printf("cpu->reg[B] = #%02X\n", cpu->reg[0]->R);
+	printf("cpu->reg[C] = #%02X\n", cpu->reg[1]->R);
 
     // Checking if Special register and corresponding bits are correct
 	cpu->sfr->NR_50_bits.S01_volume = 0x4;
