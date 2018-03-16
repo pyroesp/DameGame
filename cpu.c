@@ -79,6 +79,23 @@ void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *mem){
 			case 0x20: // SLA
 				break;
 			case 0x28: // SRA
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.H = 0;
+
+				r = opcode & 0x07;
+				if (r < 0x06){
+					pCpu->FLAG_bits.C = *(pCpu->reg[r]) & 0x01;
+					*(pCpu->reg[r]) = (0x80 & *(pCpu->reg[r])) | (*(pCpu->reg[r]) >> 1);
+					pCpu->FLAG_bits.Z = *(pCpu->reg[r]) == 0;
+				} else if (r == 0x06){
+					pCpu->FLAG_bits.C = mem[pCpu->HL] & 0x01;
+					mem[pCpu->HL] = (0x80 & mem[pCpu->HL]) | (mem[pCpu->HL] >> 1);
+					pCpu->FLAG_bits.Z = mem[pCpu->HL] == 0;
+				} else if (r == 0x07){
+					pCpu->FLAG_bits.C = pCpu->A & 0x01;
+					pCpu->A = (0x80 & pCpu->A) | (pCpu->A >> 1);
+					pCpu->FLAG_bits.Z = pCpu->A == 0;
+				}
 				break;
 			case 0x30: // SWAP
 				pCpu->FLAG_bits.N = 0;
@@ -106,7 +123,7 @@ void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *mem){
 				r = opcode & 0x07;
 				if (r < 0x06){
 					pCpu->FLAG_bits.C = *(pCpu->reg[r]) & 0x01;
-					pCpu->B = 0x7F & (*(pCpu->reg[r]) >> 1);
+					*(pCpu->reg[r]) = 0x7F & (*(pCpu->reg[r]) >> 1);
 					pCpu->FLAG_bits.Z = *(pCpu->reg[r]) == 0;
 				} else if (r == 0x06){
 					pCpu->FLAG_bits.C = mem[pCpu->HL] & 0x01;
