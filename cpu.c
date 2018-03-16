@@ -24,7 +24,7 @@ void cpu_Reset(Cpu *pCpu){
 	pCpu->HL = 0;
 	pCpu->PC = 0;
 	pCpu->SP = 0;
-	//pCpu->sfr.reg[0] = NULL;
+	pCpu->sfr = (union Special_Register*)NULL;
 }
 
 void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *mem){
