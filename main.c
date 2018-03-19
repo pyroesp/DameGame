@@ -4,7 +4,6 @@
 #include "cpu.h"
 
 int main(int argc, char *argv[]){
-    int i;
 	uint8_t mem[MEM_TOTAL] = {0};
 
     mem[0] = 0x00; // NOP
@@ -31,6 +30,15 @@ int main(int argc, char *argv[]){
 	// Checking if reg array is correctly aligned with the registers
 	printf("cpu->reg[B] = #%02X\n", cpu->reg[0]->R);
 	printf("cpu->reg[C] = #%02X\n", cpu->reg[1]->R);
+	// Checking bits are correct
+	printf("cpu->reg[B].0 = #%02X\n", cpu->reg[0]->R_bits.bit_0);
+	printf("cpu->reg[B].1 = #%02X\n", cpu->reg[0]->R_bits.bit_1);
+	printf("cpu->reg[B].2 = #%02X\n", cpu->reg[0]->R_bits.bit_2);
+	printf("cpu->reg[B].3 = #%02X\n", cpu->reg[0]->R_bits.bit_3);
+	printf("cpu->reg[C].0 = #%02X\n", cpu->reg[1]->R_bits.bit_0);
+	printf("cpu->reg[C].1 = #%02X\n", cpu->reg[1]->R_bits.bit_1);
+	printf("cpu->reg[C].2 = #%02X\n", cpu->reg[1]->R_bits.bit_2);
+	printf("cpu->reg[C].3 = #%02X\n", cpu->reg[1]->R_bits.bit_3);
 
     // Checking if Special register and corresponding bits are correct
 	cpu->sfr->NR_50_bits.S01_volume = 0x4;
