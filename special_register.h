@@ -194,27 +194,107 @@ union Special_Register{
 				uint8_t S02_output : 1; // on/off
 			}NR_50_bits;
 		};
-		uint8_t NR_51; // FF25
-		uint8_t NR_52; // FF26
+		union{
+			uint8_t NR_51; // FF25
+			struct{
+				uint8_t S01_output_1 : 1;
+				uint8_t S01_output_2 : 1;
+				uint8_t S01_output_3 : 1;
+				uint8_t S01_output_4 : 1;
+
+				uint8_t S02_output_1 : 1;
+				uint8_t S02_output_2 : 1;
+				uint8_t S02_output_3 : 1;
+				uint8_t S02_output_4 : 1;
+			}NR_51_bits;
+		};
+		union{
+			uint8_t NR_52; // FF26
+			struct{
+				uint8_t sound_1_on : 1;
+				uint8_t sound_2_on : 1;
+				uint8_t sound_3_on : 1;
+				uint8_t sound_4_on : 1;
+				uint8_t unused : 3;
+				uint8_t all_sound_on : 1;
+			}NR_52_bits;
+		};
 
 		uint8_t unused4[0x3]; // FF27-FF29
 
 		uint8_t wave_pattern[0x10]; // FF30-FF3F
 
-		uint8_t LCDC; // FF40
-		uint8_t STAT; // LCDC status FF41
-		uint8_t SCY; // FF42
-		uint8_t SCX; // FF43
-		uint8_t LY; // FF44
+		union{
+			uint8_t LCDC; // FF40 - #91 on reset
+			struct{
+				uint8_t bg_window_disp : 1;
+				uint8_t obj_sprite_disp : 1;
+				uint8_t	obj_sprite_size : 1;
+				uint8_t bg_tile_map_sel : 1;
+
+				uint8_t bg_window_tile_sel : 1;
+				uint8_t window_display : 1;
+				uint8_t window_tile_map_sel : 1;
+				uint8_t ctrl_operation : 1;
+			};
+		};
+		union{
+			uint8_t STAT; // LCDC status FF41
+			struct{
+				uint8_t mode_flag : 2;
+				uint8_t coincidence_flag : 1;
+				uint8_t mode_00 : 1;
+				uint8_t mode_01 : 1;
+				uint8_t mode_10 : 1;
+				uint8_t coincidence_sel : 1;
+				uint8_t unused : 1;
+			}STAT_bits;
+		};
+		union{
+			uint8_t SCY; // FF42
+			uint8_t scroll_Y;
+		};
+		union {
+			uint8_t SCX; // FF43
+			uint8_t scroll_X;
+		};
+		union{
+			uint8_t LY; // FF44
+			uint8_t LCD_Y_pos;
+		};
 		uint8_t LYC; // FF45
 		uint8_t DMA; // FF46
-		uint8_t BGP; // FF47
+		union{
+			uint8_t BGP; // FF47
+			struct{
+				uint8_t dot_data_00 : 2;
+				uint8_t dot_data_01 : 2;
+				uint8_t dot_data_10 : 2;
+				uint8_t dot_data_11 : 2;
+			}BGP_bits;
+		};
 		uint8_t OBP0; // FF48
 		uint8_t OBP1; // FF49
-		uint8_t WY; // FF4A
-		uint8_t WX; // FF4B
+		union{
+			uint8_t WY; // FF4A
+			uint8_t window_Y_pos;
+		};
+		union{
+			uint8_t WX; // FF4B
+			uint8_t window_X_pos;
+		};
 		uint8_t unused5[0xB4]; // FF4C - FFFE
-		uint8_t IE; // FFFF
+		union{
+			uint8_t IE; // FFFF
+			struct{
+				uint8_t v_blank : 1;
+				uint8_t lcdc : 1;
+				uint8_t timer_overflow : 1;
+				uint8_t serial_transfer_complete : 1;
+				uint8_t falling_edge_P1 : 1;
+				uint8_t unused : 3;
+			}IE_bits;
+		};
     };
 };
 
