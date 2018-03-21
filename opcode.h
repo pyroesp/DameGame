@@ -289,7 +289,7 @@ const Opcode page0[0x100] = {
 	{0xF7, "RST $30", 1, 32, NONE, "Restart at $0030"},
 	{0xF8, "LD HL, SP + #%02X", 2, 12, IMMEDIATE, "Load SP + #%02X to HL"},
 	{0xF9, "LD SP, HL", 1, 8, NONE, "Load HL to SP"},
-	{0xFA, "LD A, $%04X", 3, 16, IMMEDIATE, "Load ($%04X) to A"},
+	{0xFA, "LD A, $%04X", 3, 16, INDIRECT, "Load ($%04X) to A"},
 	{0xFB, "EI", 1, 4, NONE, "Enable Interrupt"},
 	{0xFC, "ILL", 0, 0, ILLEGAL, "Illegal Instruction 0xFC"},
 	{0xFD, "ILL", 0, 0, ILLEGAL, "Illegal Instruction 0xFD"},
