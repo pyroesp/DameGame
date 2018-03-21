@@ -4,9 +4,9 @@
 #include "cpu.h"
 
 int main(int argc, char *argv[]){
-	uint8_t mem[MEM_TOTAL] = {0};
+	uint8_t mem[MEM_TOTAL_SIZE] = {0};
 
-    mem[0] = 0x00; // NOP
+	mem[0] = 0x00; // NOP
 	mem[1] = 0xCB;
 	mem[2] = 0x88; // clear bit 1 of reg B
 	mem[3] = 0xCB;
@@ -17,8 +17,8 @@ int main(int argc, char *argv[]){
 	Cpu *cpu = NULL;
 	cpu = cpu_Init(mem);
 
-    cpu->B = 0xFF;
-    cpu->C = 0xAB;
+	cpu->B = 0xFF;
+	cpu->C = 0xAB;
 	cpu_Execute_Opcode(cpu, mem); // NOP
 	cpu_Execute_Opcode(cpu, mem); // clear bit 1 of reg B
 	cpu_Execute_Opcode(cpu, mem); // clear bit 0 of reg B
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]){
 	printf("cpu->reg[C].2 = #%02X\n", cpu->reg[1]->R_bits.bit_2);
 	printf("cpu->reg[C].3 = #%02X\n", cpu->reg[1]->R_bits.bit_3);
 
-    // Checking if Special register and corresponding bits are correct
+	// Checking if Special register and corresponding bits are correct
 	cpu->sfr->NR_50_bits.S01_volume = 0x4;
 	cpu->sfr->NR_50_bits.S02_volume = 0x1;
 
