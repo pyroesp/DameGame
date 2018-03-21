@@ -8,6 +8,11 @@
 #define INT_VEC_SERIAL_TRANSFER (0x0058)
 #define INT_VEC_P1_IO (0x0060)
 
+/*
+	When an interrupt is used a '0' should be stored in the IF register
+	before the IE register is set.
+*/
+
 enum{
 	prio_vblank = 1,
 	prio_lcdc,
