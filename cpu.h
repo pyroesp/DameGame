@@ -96,6 +96,9 @@ typedef struct{
 	uint16_t SP; // decrements before putting something on the stack
 	uint16_t PC;
 
+	uint16_t address_bus;
+	uint8_t data_bus;
+
 	union Special_Register *sfr;
 }Cpu;
 
