@@ -36,7 +36,7 @@ void cpu_Reset(Cpu *pCpu){
 }
 
 void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *pMem){
-	pCpu->sfr = (union Special_Register*)&pMem[MEM_IO_PORTS_OFFSET];
+	pCpu->sfr = (union Special_Register*)pMem;
 	return;
 }
 
