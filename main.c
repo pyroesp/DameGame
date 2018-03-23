@@ -1,28 +1,39 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "memory.h"
+#include "rom.h"
+#include "ram.h"
 #include "cpu.h"
 
 int main(int argc, char *argv[]){
-	uint8_t mem[MEM_TOTAL_SIZE] = {0};
+	Memory *ROM = NULL;
+	Memory *RAM = NULL;
+	Memory *Internal_RAM = NULL;
+	Memory *Display_RAM = NULL;
 
-	mem[0] = 0x00; // NOP
-	mem[1] = 0xCB;
-	mem[2] = 0x88; // clear bit 1 of reg B
-	mem[3] = 0xCB;
-	mem[4] = 0x80; // clear bit 0 of reg B
-	mem[5] = 0xCB;
-	mem[6] = 0x31; // swap reg C
+	ROM = mem_Init(ROM_SIZE, ROM_BANK_SIZE, ROM_SIZE / ROM_BANK_SIZE);
+	RAM = mem_Init(RAM_SIZE, RAM_BANK_SIZE, RAM_SIZE / RAM_BANK_SIZE);
+	Internal_RAM = mem_Init(MEM_RAM_INTERNAL_SIZE, 1, MEM_RAM_INTERNAL_SIZE);
+	Display_RAM = mem_Init(MEM_VIDEO_RAM_SIZE, 1, MEM_VIDEO_RAM_SIZE);
+
+	ROM->data[0] = 0x00; // NOP
+	ROM->data[1] = 0xCB;
+	ROM->data[2] = 0x88; // clear bit 1 of reg B
+	ROM->data[3] = 0xCB;
+	ROM->data[4] = 0x80; // clear bit 0 of reg B
+	ROM->data[5] = 0xCB;
+	ROM->data[6] = 0x31; // swap reg C
 
 	Cpu *cpu = NULL;
-	cpu = cpu_Init(mem);
+	cpu = cpu_Init(&Internal_RAM->data[MEM_IO_PORTS_OFFSET - MEM_RAM_INTERNAL_OFFSET]);
 
 	cpu->B = 0xFF;
 	cpu->C = 0xAB;
-	cpu_Execute_Opcode(cpu, mem); // NOP
-	cpu_Execute_Opcode(cpu, mem); // clear bit 1 of reg B
-	cpu_Execute_Opcode(cpu, mem); // clear bit 0 of reg B
-	cpu_Execute_Opcode(cpu, mem); // swap C
+	cpu_Execute_Opcode(cpu, ROM->data); // NOP
+	cpu_Execute_Opcode(cpu, ROM->data); // clear bit 1 of reg B
+	cpu_Execute_Opcode(cpu, ROM->data); // clear bit 0 of reg B
+	cpu_Execute_Opcode(cpu, ROM->data); // swap C
 
 	printf("cpu->B = #%02X\n", cpu->B); // result should be 0xFD
 	// Checking if double register have the correct endianness (reg B = MSB, reg C = LSB)
@@ -43,8 +54,6 @@ int main(int argc, char *argv[]){
 	// Checking if Special register and corresponding bits are correct
 	cpu->sfr->NR_50_bits.S01_volume = 0x4;
 	cpu->sfr->NR_50_bits.S02_volume = 0x1;
-
-	printf("NR_50 = #%02X | address = $%04X\n", cpu->sfr->NR_50, &cpu->sfr->NR_50 - mem);
 
 	cpu_Free(cpu);
 	cpu = NULL;
