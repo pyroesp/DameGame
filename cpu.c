@@ -7,7 +7,7 @@ Cpu* cpu_Init(uint8_t *pMem){
 	if (!pCpu)
 		return NULL;
 	cpu_Reset(pCpu);
-	cpu_Set_Special_Registers(pCpu, pMem);
+	cpu_SetSpecialRegisters(pCpu, pMem);
 	pCpu->reg[REG_B] = (union Cpu_Register*)&pCpu->B;
 	pCpu->reg[REG_C] = (union Cpu_Register*)&pCpu->C;
 	pCpu->reg[REG_D] = (union Cpu_Register*)&pCpu->D;
@@ -35,12 +35,12 @@ void cpu_Reset(Cpu *pCpu){
 	pCpu->sfr = (union Special_Register*)NULL;
 }
 
-void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *pMem){
+void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem){
 	pCpu->sfr = (union Special_Register*)pMem;
 	return;
 }
 
-void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *pMem){
+void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 	uint8_t opcode = 0;
 	uint16_t arg_word;
 	uint8_t arg_byte;

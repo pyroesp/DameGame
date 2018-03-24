@@ -106,8 +106,8 @@ typedef struct{
 Cpu* cpu_Init(uint8_t *pMem);
 void cpu_Free(Cpu *pCpu);
 void cpu_Reset(Cpu *pCpu);
-void cpu_Set_Special_Registers(Cpu *pCpu, uint8_t *pMem);
-void cpu_Execute_Opcode(Cpu *pCpu, uint8_t *pMem);
+void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem);
+void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem);
 
 #endif
 
