@@ -5,15 +5,13 @@ Memory *mem_Init(uint32_t size, uint32_t banks, uint32_t bank_size){
 
 	if ((size/banks == bank_size) && (size%banks == 0)){
 		mem = (Memory*)malloc(sizeof(Memory));
-		mem_SetSize(mem,size);
-		mem_SetBanks(mem, banks);
-		mem_SetBanks(mem, bank_size);
+		mem->size = size;
+		mem->banks = banks;
+		mem->bank_size = bank_size;
 		mem_SetStartIndex(mem, 0);
 		mem->data = (uint8_t*)malloc(sizeof(uint8_t) * size);
-
 		return mem;
 	}
-
 	return NULL;
 }
 
