@@ -12,7 +12,7 @@ int main(int argc, char *argv[]){
 	Memory *ROM = NULL;
 	Memory *RAM = NULL;
 	Memory *Internal_RAM = NULL;
-	Memory *Display_RAM = NULL;
+	Memory *VRAM = NULL;
 
 	cpu = cpu_Init();
 
@@ -20,7 +20,7 @@ int main(int argc, char *argv[]){
 	ROM = mem_Init(ROM_SIZE, ROM_BANK_SIZE, ROM_SIZE / ROM_BANK_SIZE);
 	RAM = mem_Init(RAM_SIZE, RAM_BANK_SIZE, RAM_SIZE / RAM_BANK_SIZE);
 	Internal_RAM = mem_Init(MEM_RAM_INTERNAL_SIZE, 1, MEM_RAM_INTERNAL_SIZE);
-	Display_RAM = mem_Init(MEM_VIDEO_RAM_SIZE, 1, MEM_VIDEO_RAM_SIZE);
+	VRAM = mem_Init(MEM_VIDEO_RAM_SIZE, 1, MEM_VIDEO_RAM_SIZE);
 
 	// set up BIOS
 	mem_CopyInfo(&cpu->map[MAP_ROM_BIOS].mem, BIOS);
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]){
 	cpu->map[MAP_ROM_BANK_SWITCH].offset = MEM_ROM_SWITCH_BANK_OFFSET;
 
 	// set up Video RAM
-	mem_CopyInfo(&cpu->map[MAP_VRAM].mem, Display_RAM);
+	mem_CopyInfo(&cpu->map[MAP_VRAM].mem, VRAM);
 	cpu->map[MAP_VRAM].offset = MEM_RAM_VIDEO_OFFSET;
 
 	// set up RAM switch bank
@@ -128,6 +128,11 @@ int main(int argc, char *argv[]){
 
     printf("Free CPU & exit\n");
 	cpu_Free(cpu);
+	mem_Free(BIOS);
+	mem_Free(ROM);
+	mem_Free(RAM);
+	mem_Free(Internal_RAM);
+	mem_Free(VRAM);
 	cpu = NULL;
 	return 0;
 }
