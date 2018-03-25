@@ -5,10 +5,10 @@ Memory *mem_Init(uint32_t size, uint32_t banks, uint32_t bank_size){
 
 	if ((size/banks == bank_size) && (size%banks == 0)){
 		mem = (Memory*)malloc(sizeof(Memory));
-		mem->size = size;
-		mem->banks = banks;
-		mem->bank_size = bank_size;
-		mem->start_idx = 0;
+		mem_SetSize(mem,size);
+		mem_SetBanks(mem, banks);
+		mem_SetBanks(mem, bank_size);
+		mem_SetStartIndex(mem, 0);
 		mem->data = (uint8_t*)malloc(sizeof(uint8_t) * size);
 
 		return mem;
@@ -22,10 +22,12 @@ void mem_Free(Memory *pMem){
 	pMem->data = NULL;
 	free(pMem);
 	pMem = NULL;
+	return;
 }
 
 void mem_SetStartIndex(Memory *pMem, uint32_t start_idx){
 	pMem->start_idx = start_idx;
+	return;
 }
 
 void mem_CopyInfo(Memory *pDest, Memory *pSrc){
@@ -33,6 +35,7 @@ void mem_CopyInfo(Memory *pDest, Memory *pSrc){
 	pDest->banks = pSrc->banks;
 	pDest->bank_size = pSrc->bank_size;
 	pDest->start_idx = pSrc->start_idx;
+	return;
 }
 
 uint16_t mem_Read(Memory *pMem, uint32_t address){
