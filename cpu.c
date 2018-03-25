@@ -1,13 +1,14 @@
 #include "cpu.h"
 #include "opcode.h"
 
-Cpu* cpu_Init(uint8_t *pMem){
+Cpu* cpu_Init(void){
 	Cpu *pCpu = NULL;
 	pCpu = (Cpu*)malloc(sizeof(Cpu));
 	if (!pCpu)
 		return NULL;
 	cpu_Reset(pCpu);
-	cpu_SetSpecialRegisters(pCpu, pMem);
+	pCpu->map = NULL;
+	pCpu->map = (MemoryMap*)malloc(sizeof(MemoryMap) * MEM_ADDRESS_SPACES);
 	pCpu->reg[REG_B] = (union Cpu_Register*)&pCpu->B;
 	pCpu->reg[REG_C] = (union Cpu_Register*)&pCpu->C;
 	pCpu->reg[REG_D] = (union Cpu_Register*)&pCpu->D;
@@ -20,8 +21,10 @@ Cpu* cpu_Init(uint8_t *pMem){
 }
 
 void cpu_Free(Cpu *pCpu){
+	free(pCpu->map);
 	free(pCpu);
 	pCpu = NULL;
+	return;
 }
 
 void cpu_Reset(Cpu *pCpu){
@@ -33,6 +36,7 @@ void cpu_Reset(Cpu *pCpu){
 	pCpu->PC = 0;
 	pCpu->SP = 0xFFFE; // Game Boy cpu manual p64
 	pCpu->sfr = (union Special_Register*)NULL;
+	return;
 }
 
 void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem){
@@ -40,31 +44,37 @@ void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem){
 	return;
 }
 
-void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
+void cpu_ExecuteOpcode(Cpu *pCpu){
 	uint8_t opcode = 0;
-	uint16_t arg_word;
-	uint8_t arg_byte;
 	uint8_t extended = 0;
 
 	// TODO: Check for interrupt
 
-	// TODO: Get opcode and arg
-	opcode = pMem[pCpu->PC];
-	if (page0[opcode].size == 2)
-		arg_byte = pMem[pCpu->PC + 1];
-	else if (page0[opcode].size == 3)
-		// Check endianness
-		arg_word = pMem[pCpu->PC + 2] << 8 | pMem[pCpu->PC + 1];
+	// TODO: Use fetch-decode-execute to read opcode and execute instruction
+	pCpu->address_bus = pCpu->PC;
+	if (pCpu->sfr->BIOS != 0){
+		opcode = pCpu->map[MAP_ROM_BANK_0].mem.data[pCpu->address_bus];
+	}else{
+		opcode = pCpu->map[MAP_ROM_BIOS].mem.data[pCpu->address_bus];
+	}
 
+	// Opcode info
 	printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page0[opcode].mnemonic, page0[opcode].description);
 
 	if (page0[opcode].type == EXTENDED){ // opcode is 0xCB
 		extended = 1;
-		opcode = pMem[pCpu->PC + 1];
+        // TODO: Use fetch-decode-execute to read opcode and execute instruction
+        pCpu->address_bus = pCpu->PC;
+        if (pCpu->sfr->BIOS != 0){
+            opcode = pCpu->map[MAP_ROM_BANK_0].mem.data[pCpu->address_bus + 1];
+        }else{
+            opcode = pCpu->map[MAP_ROM_BIOS].mem.data[pCpu->address_bus + 1];
+        }
 		printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page1[opcode].mnemonic, page1[opcode].description);
 	}
 
-	// TODO: Execute opcode
+	// TODO: Execute all opcodes
+	// TODO: Fix all (HL) instructions that read data from RAM, currently these are commented out
 	if (extended){ // page1 opcodes
 		uint8_t bit, r, mask, dummy;
 		switch (opcode & 0xF8){
@@ -79,9 +89,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = dummy | ((pCpu->reg[r]->R << 1) & 0xFE);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					pMem[pCpu->HL] = dummy | ((pMem[pCpu->HL] << 1) & 0xFE);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
+					// pMem[pCpu->HL] = dummy | ((pMem[pCpu->HL] << 1) & 0xFE);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x08: // RRC 9 bit rotate right with carry
@@ -95,9 +105,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = (dummy << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					pMem[pCpu->HL] = (dummy << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
+					// pMem[pCpu->HL] = (dummy << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x10: // RL 8 bit rotate left
@@ -110,9 +120,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = pCpu->FLAG_bits.C | ((pCpu->reg[r]->R << 1) & 0xFE);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					pMem[pCpu->HL] = pCpu->FLAG_bits.C | ((pMem[pCpu->HL] << 1) & 0xFE);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
+					// pMem[pCpu->HL] = pCpu->FLAG_bits.C | ((pMem[pCpu->HL] << 1) & 0xFE);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x18: // RR 8 bit rotate right
@@ -125,9 +135,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = (pCpu->FLAG_bits.C << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					pMem[pCpu->HL] = (pCpu->FLAG_bits.C << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
+					// pMem[pCpu->HL] = (pCpu->FLAG_bits.C << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x20: // SLA
@@ -140,9 +150,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = (pCpu->reg[r]->R << 1) & 0xFE;
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					pMem[pCpu->HL] = (pMem[pCpu->HL] << 1) & 0xFE;
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
+					// pMem[pCpu->HL] = (pMem[pCpu->HL] << 1) & 0xFE;
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x28: // SRA
@@ -155,9 +165,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = (0x80 & pCpu->reg[r]->R) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					pMem[pCpu->HL] = (0x80 & pMem[pCpu->HL]) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
+					// pMem[pCpu->HL] = (0x80 & pMem[pCpu->HL]) | ((pMem[pCpu->HL] >> 1) & 0x7F);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x30: // SWAP
@@ -172,8 +182,8 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					SWAP(pCpu->reg[r]->R);
 					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R);
 				}else{
-					SWAP(pMem[pCpu->HL]);
-					pCpu->FLAG_bits.Z = !(pMem[pCpu->HL]);
+					// SWAP(pMem[pCpu->HL]);
+					// pCpu->FLAG_bits.Z = !(pMem[pCpu->HL]);
 				}
 				break;
 			case 0x38: // SRL
@@ -186,9 +196,9 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 					pCpu->reg[r]->R = 0x7F & (pCpu->reg[r]->R >> 1);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					pMem[pCpu->HL] = 0x7F & (pMem[pCpu->HL] >> 1);
-					pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
+					// pMem[pCpu->HL] = 0x7F & (pMem[pCpu->HL] >> 1);
+					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
 				}
 				break;
 			case 0x40: // BIT 0
@@ -210,7 +220,7 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 				if (r != 0x06)
 					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R & mask);
 				else
-					pCpu->FLAG_bits.Z = !(pMem[pCpu->HL] & mask);
+					// pCpu->FLAG_bits.Z = !(pMem[pCpu->HL] & mask);
 				break;
 			case 0x80: // RES 0
 			case 0x88: // RES 1
@@ -228,7 +238,7 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 				if (r != 0x06)
 					pCpu->reg[r]->R &= ~mask;
 				else
-					pMem[pCpu->HL] &= ~mask;
+					// pMem[pCpu->HL] &= ~mask;
 				break;
 			case 0xC0: // SET 0
 			case 0xC8: // SET 1
@@ -246,7 +256,7 @@ void cpu_ExecuteOpcode(Cpu *pCpu, uint8_t *pMem){
 				if (r != 0x06)
 					pCpu->reg[r]->R |= mask;
 				else
-					pMem[pCpu->HL] |= mask;
+					// pMem[pCpu->HL] |= mask;
 				break;
 			default:
 				printf("unknown instruction CB%02X\n", opcode);
