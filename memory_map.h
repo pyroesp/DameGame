@@ -20,17 +20,18 @@ enum{
 	MAP_RAM_INTERNAL, // C000 - DFFF
 	MAP_RAM_INTERNAL_ECHO, // E000 - FDFF
 	MAP_OAM, // FE00 - FE9F
-	MAP_UNUSABLE, // FEA0 - FE9F
+	MAP_HRAM, // FEA0 - FE9F
 	MAP_IO_PORTS, // FF00 - FFFF
 };
 
 #define MEM_ROM_BIOS_SIZE (0x100)
 #define MEM_VIDEO_RAM_SIZE (0x2000)
-#define MEM_RAM_INTERNAL_SIZE (0x4000) // internal_ram -> [C000; FFFF]
+#define MEM_RAM_INTERNAL_SIZE (0x4000) // internal_ram -> [$C000; $FFFF]
 #define MEM_RAM_INTERNAL_ECHO_SIZE (0x1E00)
 #define MEM_SPRITE_ATTRI_SIZE (0x00A0) // OAM
 #define MEM_UNUSABLE_SIZE (0x0060)
-#define MEM_IO_PORTS_SIZE (0x0100)
+#define MEM_IO_PORTS_SIZE (0x0100) // [$FF00; $FFFF] -> contains HRAM, easier for SFR structure
+#define MEM_HRAM_SIZE (0x7F)
 
 #define MEM_ROM_BIOS_OFFSET (0x0000)
 #define MEM_ROM_BANK_0_OFFSET (0x0000)
@@ -42,12 +43,13 @@ enum{
 #define MEM_SPRITE_ATTRI_OFFSET (0xFE00)
 #define MEM_UNUSABLE_OFFSET (0xFEA0)
 #define MEM_IO_PORTS_OFFSET (0xFF00)
-#define MEM_RAM_INTERNAL2_OFFSET (0xFF80)
+#define MEM_HRAM_OFFSET (0xFF80)
+#define MEM_RAM_IE_REG_OFFSET (0xFFFF)
 
 
 typedef struct{
 	Memory mem; // RAM, ROM, VRAM, ...
-	uint16_t map_offset; // address offset of memory map
+	uint16_t offset; // address offset of memory map
 }MemoryMap;
 
 
