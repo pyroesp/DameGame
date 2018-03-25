@@ -219,11 +219,8 @@ union Special_Register{
 				uint8_t all_sound_on : 1;
 			}NR_52_bits;
 		};
-
 		uint8_t unused4[0x3]; // FF27-FF29
-
 		uint8_t wave_pattern[0x10]; // FF30-FF3F
-
 		union{
 			uint8_t LCDC; // FF40 - #91 on reset
 			struct{
@@ -283,7 +280,11 @@ union Special_Register{
 			uint8_t WX; // FF4B
 			uint8_t window_X_pos;
 		};
-		uint8_t unused5[0xB4]; // FF4C - FFFE
+		uint8_t unused5[0x4]; // FF4C - FF4F
+		// disable bios by setting to 1;
+		uint8_t BIOS; // FF50
+		uint8_t unused6[0x2F]; // FF51 - FF7F
+		uint8_t hram[0x7F]; // FF80 - FFFE
 		union{
 			uint8_t IE; // FFFF
 			struct{
