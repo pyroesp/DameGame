@@ -29,6 +29,7 @@ void cpu_Free(Cpu *pCpu){
 
 void cpu_Reset(Cpu *pCpu){
 	pCpu->clock_cycle = 0;
+	pCpu->extended = 0;
 	pCpu->AF = 0;
 	pCpu->BC = 0;
 	pCpu->DE = 0;
@@ -44,38 +45,86 @@ void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem){
 	return;
 }
 
-void cpu_ExecuteOpcode(Cpu *pCpu){
-	uint8_t opcode = 0;
-	uint8_t extended = 0;
+uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, return pointer to byte in memory
+	uint8_t *byte = NULL;
+	MemoryMap *map = NULL;
+
+	// TODO : Bin search correct memory space ?
+	if (pCpu->address_bus < MEM_ROM_SWITCH_BANK_OFFSET){ // BIOS & ROM bank 0
+		if (pCpu->sfr->BIOS){ // BIOS disabled
+			map = &pCpu->map[MAP_ROM_BANK_0];
+		}else{
+			map = &pCpu->map[MEM_ROM_BIOS_SIZE];
+		}
+	}else if (pCpu->address_bus < MEM_VIDEO_RAM_OFFSET){ // ROM bank switch
+		map = &pCpu->map[MAP_ROM_BANK_SWITCH];
+	}else if (pCpu->address_bus < MEM_RAM_SWITCH_OFFSET){ // VRAM
+		map = &pCpu->map[MAP_VRAM];
+	}else if (pCpu->address_bus < MEM_RAM_INTERNAL_OFFSET){ // RAM bank switch
+		map = &pCpu->map[MAP_RAM_BANK_SWITCH];
+	}else if (pCpu->address_bus < MEM_RAM_INTERNAL_ECHO_OFFSET){ // Internal RAM
+		map = &pCpu->map[MAP_RAM_INTERNAL];
+	}else if (pCpu->address_bus < MEM_SPRITE_ATTRI_OFFSET){ // Internal RAM echo
+		map = &pCpu->map[MAP_RAM_INTERNAL_ECHO];
+	}else if (pCpu->address_bus < MEM_UNUSABLE_OFFSET){ // Object attribute ram
+		map = &pCpu->map[MAP_OAM];
+	}else{
+		if (pCpu->address_bus < MEM_IO_PORTS_OFFSET){ // Unusable memory
+			printf("Illegal address> $%04X\n", pCpu->address_bus);
+			return NULL;
+		}
+		if (pCpu->address_bus >= MEM_HRAM_OFFSET && pCpu->address_bus < MEM_HRAM_OFFSET + MEM_HRAM_SIZE){ // HRAM
+			map = &pCpu->map[MAP_HRAM];
+		}else if (pCpu->address_bus <= MEM_IE_REG_OFFSET){
+			map = &pCpu->map[MAP_IO_PORTS];
+		}else{
+			printf("Illegal address> $%04X\n", pCpu->address_bus);
+			return NULL;
+		}
+	}
+
+	if (map != NULL){
+		byte = &map->mem.data[(pCpu->address_bus - map->offset) + map->mem.start_idx];
+		pCpu->data_bus = (*byte);
+		return byte;
+	}else{
+		printf("map pointer is null for some reason\n");
+		return NULL;
+	}
+}
+
+void cpu_Run(Cpu *pCpu){
+	uint8_t opcode;
+	uint8_t *byte = NULL;
 
 	// TODO: Check for interrupt
 
 	// TODO: Use fetch-decode-execute to read opcode and execute instruction
+	// Read opcode first
 	pCpu->address_bus = pCpu->PC;
-	if (pCpu->sfr->BIOS != 0){
-		opcode = pCpu->map[MAP_ROM_BANK_0].mem.data[pCpu->address_bus];
+	byte = cpu_GetByte(pCpu);
+	if (byte == NULL){
+		printf("GetByte returned error\n");
+		return;
 	}else{
-		opcode = pCpu->map[MAP_ROM_BIOS].mem.data[pCpu->address_bus];
-	}
-
-	// Opcode info
-	printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page0[opcode].mnemonic, page0[opcode].description);
-
-	if (page0[opcode].type == EXTENDED){ // opcode is 0xCB
-		extended = 1;
-        // TODO: Use fetch-decode-execute to read opcode and execute instruction
-        pCpu->address_bus = pCpu->PC;
-        if (pCpu->sfr->BIOS != 0){
-            opcode = pCpu->map[MAP_ROM_BANK_0].mem.data[pCpu->address_bus + 1];
-        }else{
-            opcode = pCpu->map[MAP_ROM_BIOS].mem.data[pCpu->address_bus + 1];
+        if (pCpu->data_bus == OPCODE_EXTENDED){
+            pCpu->extended = 1;
+			pCpu->address_bus = pCpu->PC + 1;
+			byte = cpu_GetByte(pCpu);
+			if (byte == NULL){
+				printf("GetByte returned error\n");
+				return;
+			}
+			printf("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page1[pCpu->data_bus].mnemonic, page1[pCpu->data_bus].description);
+		}else{
+            printf("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page0[pCpu->data_bus].mnemonic, page0[pCpu->data_bus].description);
         }
-		printf("$%04X> %02X %s\t\t%s\n", pCpu->PC, opcode, page1[opcode].mnemonic, page1[opcode].description);
+		opcode = pCpu->data_bus;
 	}
 
 	// TODO: Execute all opcodes
 	// TODO: Fix all (HL) instructions that read data from RAM, currently these are commented out
-	if (extended){ // page1 opcodes
+	if (pCpu->extended){ // page1 opcodes
 		uint8_t bit, r, mask, dummy;
 		switch (opcode & 0xF8){
 			case 0x00: // RLC 9 bit rotate left with carry
@@ -89,9 +138,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = dummy | ((pCpu->reg[r]->R << 1) & 0xFE);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					// pMem[pCpu->HL] = dummy | ((pMem[pCpu->HL] << 1) & 0xFE);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
+					*byte = dummy | ((pCpu->data_bus << 1) & 0xFE);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x08: // RRC 9 bit rotate right with carry
@@ -105,9 +160,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = (dummy << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					// pMem[pCpu->HL] = (dummy << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
+					*byte = (dummy << 7) | ((pCpu->data_bus >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x10: // RL 8 bit rotate left
@@ -120,9 +181,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = pCpu->FLAG_bits.C | ((pCpu->reg[r]->R << 1) & 0xFE);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					// pMem[pCpu->HL] = pCpu->FLAG_bits.C | ((pMem[pCpu->HL] << 1) & 0xFE);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
+					*byte = pCpu->FLAG_bits.C | ((pCpu->data_bus << 1) & 0xFE);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x18: // RR 8 bit rotate right
@@ -135,9 +202,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = (pCpu->FLAG_bits.C << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					// pMem[pCpu->HL] = (pCpu->FLAG_bits.C << 7) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
+					*byte = (pCpu->FLAG_bits.C << 7) | ((pCpu->data_bus >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x20: // SLA
@@ -150,9 +223,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = (pCpu->reg[r]->R << 1) & 0xFE;
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x80;
-					// pMem[pCpu->HL] = (pMem[pCpu->HL] << 1) & 0xFE;
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
+					*byte = (pCpu->data_bus << 1) & 0xFE;
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x28: // SRA
@@ -165,9 +244,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = (0x80 & pCpu->reg[r]->R) | ((pCpu->reg[r]->R >> 1) & 0x7F);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					// pMem[pCpu->HL] = (0x80 & pMem[pCpu->HL]) | ((pMem[pCpu->HL] >> 1) & 0x7F);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
+					*byte = (0x80 & pCpu->data_bus) | ((pCpu->data_bus >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x30: // SWAP
@@ -182,8 +267,14 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					SWAP(pCpu->reg[r]->R);
 					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R);
 				}else{
-					// SWAP(pMem[pCpu->HL]);
-					// pCpu->FLAG_bits.Z = !(pMem[pCpu->HL]);
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					SWAP(pCpu->data_bus);
+					pCpu->FLAG_bits.Z = !(pCpu->data_bus);
 				}
 				break;
 			case 0x38: // SRL
@@ -196,9 +287,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 					pCpu->reg[r]->R = 0x7F & (pCpu->reg[r]->R >> 1);
 					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
 				}else{
-					// pCpu->FLAG_bits.C = pMem[pCpu->HL] & 0x01;
-					// pMem[pCpu->HL] = 0x7F & (pMem[pCpu->HL] >> 1);
-					// pCpu->FLAG_bits.Z = pMem[pCpu->HL] == 0;
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
+					*byte = 0x7F & (pCpu->data_bus >> 1);
+					pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				}
 				break;
 			case 0x40: // BIT 0
@@ -219,8 +316,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 				r = opcode & 0x07;
 				if (r != 0x06)
 					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R & mask);
-				else
-					// pCpu->FLAG_bits.Z = !(pMem[pCpu->HL] & mask);
+				else{
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					pCpu->FLAG_bits.Z = !(pCpu->data_bus & mask);
+				}
 				break;
 			case 0x80: // RES 0
 			case 0x88: // RES 1
@@ -237,8 +341,15 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 				r = opcode & 0x07;
 				if (r != 0x06)
 					pCpu->reg[r]->R &= ~mask;
-				else
-					// pMem[pCpu->HL] &= ~mask;
+				else{
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					*byte = pCpu->data_bus & ~mask;
+				}
 				break;
 			case 0xC0: // SET 0
 			case 0xC8: // SET 1
@@ -255,26 +366,31 @@ void cpu_ExecuteOpcode(Cpu *pCpu){
 				r = opcode & 0x07;
 				if (r != 0x06)
 					pCpu->reg[r]->R |= mask;
-				else
-					// pMem[pCpu->HL] |= mask;
+				else{
+					pCpu->address_bus = pCpu->HL;
+					byte = cpu_GetByte(pCpu);
+					if (byte == NULL){
+						printf("cpu_GetByte failed\n");
+						return;
+					}
+					*byte = pCpu->data_bus | mask;
+				}
 				break;
 			default:
-				printf("unknown instruction CB%02X\n", opcode);
+				printf("unknown instruction #%X\n", opcode & 0xF8);
 				break;
 		}
+		// reset extended mode
+		pCpu->extended = 0;
+		// increase clock cycle and PC
+		pCpu->clock_cycle += page1[pCpu->PC + 1].clock_cycles;
+		pCpu->PC += page1[pCpu->PC + 1].size;
 	}else{ // page0 opcodes
 		switch (opcode){
             default:
                 break;
 		}
-	}
-
-
-	// Increase clock_cycle and PC
-	if (extended){
-		pCpu->clock_cycle += page1[pCpu->PC + 1].clock_cycles;
-		pCpu->PC += page1[pCpu->PC + 1].size;
-	}else{
+		// increase clock cycle and PC
 		pCpu->clock_cycle += page0[pCpu->PC].clock_cycles;
 		pCpu->PC += page0[pCpu->PC].size;
 	}

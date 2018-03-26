@@ -98,6 +98,7 @@ typedef struct{
 
 	uint16_t address_bus;
 	uint8_t data_bus;
+	uint8_t extended;
 
 	MemoryMap *map;
 
@@ -109,7 +110,10 @@ Cpu* cpu_Init(void);
 void cpu_Free(Cpu *pCpu);
 void cpu_Reset(Cpu *pCpu);
 void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem);
-void cpu_ExecuteOpcode(Cpu *pCpu);
+
+uint8_t* cpu_GetByte(Cpu *pCpu);
+
+void cpu_Run(Cpu *pCpu);
 
 #endif
 
