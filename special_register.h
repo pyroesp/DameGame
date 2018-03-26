@@ -1,6 +1,14 @@
 #ifndef _SPECIAL_REGISTER_H
 #define _SPECIAL_REGISTER_H
 
+/*
+
+To be able to map the IO registers correctly, including the 
+nterrupt Enable Register at address $FFFF, I've decided to 
+include the HRAM of 0x7F bytes into this structure as an array
+
+*/
+
 union Special_Register{
 	uint8_t reg[0x100]; /* point to FF00 in the memory */
 	struct{
