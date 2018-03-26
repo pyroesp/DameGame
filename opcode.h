@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define OPCODE_EXTENDED (0xCB)
+
 enum OPCODE_TYPE{
 	NONE,
 	IMMEDIATE,
