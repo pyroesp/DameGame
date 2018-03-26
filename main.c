@@ -10,17 +10,18 @@ int main(int argc, char *argv[]){
 	Cpu *cpu = NULL;
 	Memory *BIOS = NULL;
 	Memory *ROM = NULL;
+	Memory *VRAM = NULL;
 	Memory *RAM = NULL;
 	Memory *Internal_RAM = NULL;
-	Memory *VRAM = NULL;
-
-	cpu = cpu_Init();
 
 	BIOS = mem_Init(MEM_ROM_BIOS_SIZE, 1, MEM_ROM_BIOS_SIZE);
 	ROM = mem_Init(ROM_SIZE, ROM_BANK_SIZE, ROM_SIZE / ROM_BANK_SIZE);
-	RAM = mem_Init(RAM_SIZE, RAM_BANK_SIZE, RAM_SIZE / RAM_BANK_SIZE);
-	Internal_RAM = mem_Init(MEM_RAM_INTERNAL_SIZE, 1, MEM_RAM_INTERNAL_SIZE);
 	VRAM = mem_Init(MEM_VIDEO_RAM_SIZE, 1, MEM_VIDEO_RAM_SIZE);
+	RAM = mem_Init(RAM_SIZE, RAM_BANK_SIZE, RAM_SIZE / RAM_BANK_SIZE);
+	Internal_RAM = mem_Init(MEM_RAM_INTERNAL_SIZE_TOTAL, 1, MEM_RAM_INTERNAL_SIZE_TOTAL);
+
+	// Init CPU
+	cpu = cpu_Init();
 
 	// set up BIOS
 	mem_CopyInfo(&cpu->map[MAP_ROM_BIOS].mem, BIOS);
@@ -37,13 +38,13 @@ int main(int argc, char *argv[]){
 
 	// set up Video RAM
 	mem_CopyInfo(&cpu->map[MAP_VRAM].mem, VRAM);
-	cpu->map[MAP_VRAM].offset = MEM_RAM_VIDEO_OFFSET;
+	cpu->map[MAP_VRAM].offset = MEM_VIDEO_RAM_OFFSET;
 
-	// set up RAM switch bank
+	// set up external RAM switch bank
 	mem_CopyInfo(&cpu->map[MAP_RAM_BANK_SWITCH].mem, RAM);
 	cpu->map[MAP_RAM_BANK_SWITCH].offset = MEM_RAM_SWITCH_OFFSET;
 
-	// set up internal RAM
+	// set up internal RAM $C000 - $DFFF
 	cpu->map[MAP_RAM_INTERNAL].mem.data = Internal_RAM->data;
 	cpu->map[MAP_RAM_INTERNAL].mem.banks = 1;
 	cpu->map[MAP_RAM_INTERNAL].mem.size = RAM_BANK_SIZE;
@@ -51,7 +52,7 @@ int main(int argc, char *argv[]){
 	cpu->map[MAP_RAM_INTERNAL].mem.start_idx = 0;
 	cpu->map[MAP_RAM_INTERNAL].offset = MEM_RAM_INTERNAL_OFFSET;
 
-	// set up echo of internal RAM
+	// set up echo of internal RAM $E000 - $FDFF => points to $C000 - $DFFF
 	cpu->map[MAP_RAM_INTERNAL_ECHO].mem.data = Internal_RAM->data;
 	cpu->map[MAP_RAM_INTERNAL_ECHO].mem.banks = 1;
 	cpu->map[MAP_RAM_INTERNAL_ECHO].mem.size = MEM_RAM_INTERNAL_ECHO_SIZE;
@@ -59,7 +60,7 @@ int main(int argc, char *argv[]){
 	cpu->map[MAP_RAM_INTERNAL_ECHO].mem.start_idx = 0;
 	cpu->map[MAP_RAM_INTERNAL_ECHO].offset = MEM_RAM_INTERNAL_ECHO_OFFSET;
 
-	// set up object attribute mem
+	// set up object attribute mem $FE00 - $FE9F
 	cpu->map[MAP_OAM].mem.data = &Internal_RAM->data[MEM_SPRITE_ATTRI_OFFSET - MEM_RAM_INTERNAL_OFFSET];
 	cpu->map[MAP_OAM].mem.banks = 1;
 	cpu->map[MAP_OAM].mem.size = MEM_SPRITE_ATTRI_SIZE;
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]){
 	cpu->map[MAP_OAM].mem.start_idx = 0;
 	cpu->map[MAP_OAM].offset = MEM_SPRITE_ATTRI_OFFSET;
 
-	// set up unusable section of map, not really needed
+	// set up HRAM section of map $FF80 - $FFFE
 	cpu->map[MAP_HRAM].mem.data = &Internal_RAM->data[MEM_HRAM_OFFSET - MEM_RAM_INTERNAL_OFFSET];
 	cpu->map[MAP_HRAM].mem.banks = 1;
 	cpu->map[MAP_HRAM].mem.size = MEM_HRAM_SIZE;
@@ -75,7 +76,7 @@ int main(int argc, char *argv[]){
 	cpu->map[MAP_HRAM].mem.start_idx = 0;
 	cpu->map[MAP_HRAM].offset = MEM_HRAM_OFFSET;
 
-	// set up IO ports, including interrupt enable register
+	// set up IO ports, including interrupt enable register $FF00 - $FFFF
 	cpu->map[MAP_IO_PORTS].mem.data = &Internal_RAM->data[MEM_IO_PORTS_OFFSET - MEM_RAM_INTERNAL_OFFSET];
 	cpu->map[MAP_IO_PORTS].mem.banks = 1;
 	cpu->map[MAP_IO_PORTS].mem.size = MEM_IO_PORTS_SIZE;
@@ -85,6 +86,7 @@ int main(int argc, char *argv[]){
 
     // Set SFR pointer
 	cpu_SetSpecialRegisters(cpu, cpu->map[MAP_IO_PORTS].mem.data);
+
 	cpu->sfr->BIOS = 1; // disable BIOS for now
 
     // Write some opcodes into ROM
@@ -99,14 +101,16 @@ int main(int argc, char *argv[]){
 	cpu->B = 0xFF;
 	cpu->C = 0xAB;
 
-	cpu_ExecuteOpcode(cpu); // NOP
-	cpu_ExecuteOpcode(cpu); // clear bit 1 of reg B
-	cpu_ExecuteOpcode(cpu); // clear bit 0 of reg B
-	cpu_ExecuteOpcode(cpu); // swap C
+	printf("cpu->BC = #%04X\n", cpu->BC); // result should be 0xFFAB
+
+	cpu_Run(cpu); // NOP
+	cpu_Run(cpu); // clear bit 1 of reg B
+	cpu_Run(cpu); // clear bit 0 of reg B
+	cpu_Run(cpu); // swap C
 
 	printf("cpu->B = #%02X\n", cpu->B); // result should be 0xFD
 	// Checking if double register have the correct endianness (reg B = MSB, reg C = LSB)
-	printf("cpu->BC = #%04X\n", cpu->BC);
+	printf("cpu->BC = #%04X\n", cpu->BC); // result should be 0xBA
 	// Checking if reg array is correctly aligned with the registers
 	printf("cpu->reg[B] = #%02X\n", cpu->reg[0]->R);
 	printf("cpu->reg[C] = #%02X\n", cpu->reg[1]->R);
@@ -126,13 +130,12 @@ int main(int argc, char *argv[]){
 	printf("cpu->sfr->NR_50_bits.S01_volume = #%02X\n", cpu->sfr->NR_50_bits.S01_volume);
 	printf("cpu->sfr->NR_50_bits.S02_volume = #%02X\n", cpu->sfr->NR_50_bits.S02_volume);
 
-    printf("Free CPU & exit\n");
+    printf("free stuff & exit\n");
 	cpu_Free(cpu);
 	mem_Free(BIOS);
 	mem_Free(ROM);
 	mem_Free(RAM);
 	mem_Free(Internal_RAM);
 	mem_Free(VRAM);
-	cpu = NULL;
 	return 0;
 }
