@@ -2,15 +2,12 @@
 #define _SPECIAL_REGISTER_H
 
 /*
-
-To be able to map the IO registers correctly, including the 
-nterrupt Enable Register at address $FFFF, I've decided to 
-include the HRAM of 0x7F bytes into this structure as an array
-
+	Use as union Special_Register *sfr;
+	Point to address $FF00 in the CPU address space.
 */
 
 union Special_Register{
-	uint8_t reg[0x100]; /* point to FF00 in the memory */
+	uint8_t reg[0x51]; /* point to FF00 in the memory */
 	struct{
 		union{
 			uint8_t P1; // Reading joypad FF00
@@ -291,19 +288,6 @@ union Special_Register{
 		uint8_t unused5[0x4]; // FF4C - FF4F
 		// disable bios by setting to 1;
 		uint8_t BIOS; // FF50
-		uint8_t unused6[0x2F]; // FF51 - FF7F
-		uint8_t hram[0x7F]; // FF80 - FFFE
-		union{
-			uint8_t IE; // FFFF
-			struct{
-				uint8_t v_blank : 1;
-				uint8_t lcdc : 1;
-				uint8_t timer_overflow : 1;
-				uint8_t serial_transfer_complete : 1;
-				uint8_t falling_edge_P1 : 1;
-				uint8_t unused : 3;
-			}IE_bits;
-		};
     };
 };
 

@@ -21,5 +21,21 @@ enum{
 	prio_p1_io
 }Priority;
 
+/*
+	Use as union Interrupt_Enable *ie_reg;
+	Point to address $FF00 in the CPU address space.
+*/
+
+union Interrupt_Enable{
+	uint8_t IE; // $FFFF
+	struct{
+		uint8_t v_blank : 1;
+		uint8_t lcdc : 1;
+		uint8_t timer_overflow : 1;
+		uint8_t serial_transfer_complete : 1;
+		uint8_t falling_edge_P1 : 1;
+		uint8_t unused : 3;
+	}IE_bits;
+};
 
 #endif
