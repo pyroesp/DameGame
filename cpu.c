@@ -45,6 +45,11 @@ void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem){
 	return;
 }
 
+void cpu_SetInterruptEnableRegister(Cpu *pCpu, uint8_t *pMem){
+	pCpu->ie_reg = (union Interrupt_Enable*)pMem;
+	return;
+}
+
 uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, return pointer to byte in memory
 	uint8_t *byte = NULL;
 	MemoryMap *map = NULL;
@@ -70,7 +75,7 @@ uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, retu
 		map = &pCpu->map[MAP_OAM];
 	}else{
 		if (pCpu->address_bus < MEM_IO_PORTS_OFFSET){ // Unusable memory
-			printf("Illegal address> $%04X\n", pCpu->address_bus);
+			DEBUG_PRINTF("Illegal address> $%04X\n", pCpu->address_bus);
 			return NULL;
 		}
 		if (pCpu->address_bus >= MEM_HRAM_OFFSET && pCpu->address_bus < MEM_HRAM_OFFSET + MEM_HRAM_SIZE){ // HRAM
@@ -78,7 +83,7 @@ uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, retu
 		}else if (pCpu->address_bus <= MEM_IE_REG_OFFSET){
 			map = &pCpu->map[MAP_IO_PORTS];
 		}else{
-			printf("Illegal address> $%04X\n", pCpu->address_bus);
+			DEBUG_PRINTF("Illegal address> $%04X\n", pCpu->address_bus);
 			return NULL;
 		}
 	}
@@ -88,7 +93,7 @@ uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, retu
 		pCpu->data_bus = (*byte);
 		return byte;
 	}else{
-		printf("map pointer is null for some reason\n");
+		DEBUG_PRINTF("map pointer is null for some reason\n");
 		return NULL;
 	}
 }
@@ -104,7 +109,7 @@ void cpu_Run(Cpu *pCpu){
 	pCpu->address_bus = pCpu->PC;
 	byte = cpu_GetByte(pCpu);
 	if (byte == NULL){
-		printf("GetByte returned error\n");
+		DEBUG_PRINTF("GetByte returned error\n");
 		return;
 	}else{
         if (pCpu->data_bus == OPCODE_EXTENDED){
@@ -112,12 +117,12 @@ void cpu_Run(Cpu *pCpu){
 			pCpu->address_bus = pCpu->PC + 1;
 			byte = cpu_GetByte(pCpu);
 			if (byte == NULL){
-				printf("GetByte returned error\n");
+				DEBUG_PRINTF("GetByte returned error\n");
 				return;
 			}
-			printf("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page1[pCpu->data_bus].mnemonic, page1[pCpu->data_bus].description);
+			DEBUG_PRINTF("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page1[pCpu->data_bus].mnemonic, page1[pCpu->data_bus].description);
 		}else{
-            printf("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page0[pCpu->data_bus].mnemonic, page0[pCpu->data_bus].description);
+            DEBUG_PRINTF("$%04X> %02X %s\t\t%s\n", pCpu->address_bus, pCpu->data_bus, page0[pCpu->data_bus].mnemonic, page0[pCpu->data_bus].description);
         }
 		opcode = pCpu->data_bus;
 	}
@@ -141,7 +146,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
@@ -163,7 +168,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
@@ -184,7 +189,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
@@ -205,7 +210,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
@@ -226,7 +231,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x80;
@@ -247,7 +252,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
@@ -270,7 +275,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					SWAP(pCpu->data_bus);
@@ -290,7 +295,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.C = pCpu->data_bus & 0x01;
@@ -320,7 +325,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					pCpu->FLAG_bits.Z = !(pCpu->data_bus & mask);
@@ -345,7 +350,7 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					*byte = pCpu->data_bus & ~mask;
@@ -370,14 +375,14 @@ void cpu_Run(Cpu *pCpu){
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
 					if (byte == NULL){
-						printf("cpu_GetByte failed\n");
+						DEBUG_PRINTF("cpu_GetByte failed\n");
 						return;
 					}
 					*byte = pCpu->data_bus | mask;
 				}
 				break;
 			default:
-				printf("unknown instruction #%X\n", opcode & 0xF8);
+				DEBUG_PRINTF("unknown instruction #%X\n", opcode & 0xF8);
 				break;
 		}
 		// reset extended mode

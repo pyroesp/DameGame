@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "debug.h"
 #include "special_register.h"
 #include "interrupt.h"
 #include "memory_map.h"
@@ -103,6 +104,7 @@ typedef struct{
 	MemoryMap *map;
 
 	union Special_Register *sfr;
+	union Interrupt_Enable *ie_reg;
 }Cpu;
 
 
@@ -110,6 +112,7 @@ Cpu* cpu_Init(void);
 void cpu_Free(Cpu *pCpu);
 void cpu_Reset(Cpu *pCpu);
 void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem);
+void cpu_SetInterruptEnableRegister(Cpu *pCpu, uint8_t *pMem);
 
 uint8_t* cpu_GetByte(Cpu *pCpu);
 
