@@ -82,6 +82,8 @@ VM* vm_Init(void){
 
     // Set SFR pointer
 	cpu_SetSpecialRegisters(cpu, cpu->map[MAP_IO_PORTS].mem.data);
+	// Set IE register
+	cpu_SetInterruptEnableRegister(cpu, &Internal_RAM->data[MEM_IE_REG_OFFSET - MEM_RAM_INTERNAL_OFFSET]);
 
 	// add all to VM
 	vm = (VM*)malloc(sizeof(VM));
