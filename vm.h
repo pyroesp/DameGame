@@ -1,8 +1,8 @@
 #ifndef _VM_H
 #define _VM_H
 
-
 #include <stdint.h>
+#include "debug.h"
 #include "rom.h"
 #include "ram.h"
 #include "memory.h"
