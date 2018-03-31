@@ -15,6 +15,9 @@
 
 */
 
+#define REG_BYTE (8)
+#define REG_WORD (4)
+
 #define REG_B (0)
 #define REG_C (1)
 #define REG_D (2)
@@ -23,6 +26,11 @@
 #define REG_L (5)
 #define REG_A (7)
 #define REG_F (6)
+
+#define REG_BC (0)
+#define REG_DE (1)
+#define REG_HL (2)
+#define REG_SP (3)
 
 union Cpu_Register{
 	uint8_t R;
@@ -92,7 +100,8 @@ typedef struct{
 			uint8_t A;
 		};
 	};
-	union Cpu_Register *reg[8];
+	union Cpu_Register *reg[REG_BYTE];
+	uint16_t *dreg[REG_WORD];
 
 	uint16_t SP; // decrements before putting something on the stack
 	uint16_t PC;
@@ -105,6 +114,9 @@ typedef struct{
 
 	union Special_Register *sfr;
 	union Interrupt_Enable *ie_reg;
+
+	uint8_t stop; // set by STOP instruction
+	uint8_t halt; // set by HALT instruction
 }Cpu;
 
 
@@ -114,7 +126,13 @@ void cpu_Reset(Cpu *pCpu);
 void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem);
 void cpu_SetInterruptEnableRegister(Cpu *pCpu, uint8_t *pMem);
 
+// Returns pointer to byte, value of byte stored in data_bus
 uint8_t* cpu_GetByte(Cpu *pCpu);
+// Returns word value from PC, no pointer
+uint16_t cpu_GetWordFromPC(Cpu *pCpu);
+
+uint16_t cpu_Pop(Cpu *pCpu);
+void cpu_Push(Cpu *pCpu, uint16_t var);
 
 void cpu_Run(Cpu *pCpu);
 
