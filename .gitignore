@@ -2,6 +2,8 @@
 data/
 obj/
 bin/
+bios/
+games/
 printf_SFR.c
 *.cbp
 *.layout
