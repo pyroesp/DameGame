@@ -17,6 +17,10 @@ Cpu* cpu_Init(void){
 	pCpu->reg[REG_L] = (union Cpu_Register*)&pCpu->L;
 	pCpu->reg[REG_A] = (union Cpu_Register*)&pCpu->A; // reg[7]
 	pCpu->reg[REG_F] = (union Cpu_Register*)&pCpu->F;
+	pCpu->dreg[REG_BC] = &pCpu->BC;
+	pCpu->dreg[REG_DE] = &pCpu->DE;
+	pCpu->dreg[REG_HL] = &pCpu->HL;
+	pCpu->dreg[REG_SP] = &pCpu->SP;
 	return pCpu;
 }
 
@@ -30,6 +34,8 @@ void cpu_Free(Cpu *pCpu){
 void cpu_Reset(Cpu *pCpu){
 	pCpu->clock_cycle = 0;
 	pCpu->extended = 0;
+	pCpu->stop = 0;
+	pCpu->halt = 0;
 	pCpu->AF = 0;
 	pCpu->BC = 0;
 	pCpu->DE = 0;
@@ -98,9 +104,45 @@ uint8_t* cpu_GetByte(Cpu *pCpu){ // read byte at address_bus into data_bus, retu
 	}
 }
 
+uint16_t cpu_GetWordFromPC(Cpu *pCpu){
+	uint16_t word = 0;
+	cpu_GetByte(pCpu);
+	word = pCpu->data_bus;
+	pCpu->address_bus = pCpu->PC + 1;
+	cpu_GetByte(pCpu);
+	word = ((word << 8) & 0xFF00) | pCpu->data_bus;
+	return word;
+}
+
+uint16_t cpu_Pop(Cpu *pCpu){
+	uint16_t pop;
+	pCpu->address_bus = pCpu->SP;
+	cpu_GetByte(pCpu);
+	pop = pCpu->data_bus;
+	pCpu->address_bus = pCpu->SP + 1;
+	cpu_GetByte(pCpu);
+	pop = pop | pCpu->data_bus << 8;
+	pCpu->SP += 2;
+	return pop;
+}
+
+void cpu_Push(Cpu *pCpu, uint16_t var){
+    uint8_t *byte;
+	pCpu->address_bus = pCpu->SP - 1;
+	byte = cpu_GetByte(pCpu);
+	*byte = var >> 8 & 0xFF;
+	pCpu->address_bus = pCpu->SP - 2;
+	byte = cpu_GetByte(pCpu);
+	*byte = var & 0xFF;
+	pCpu->SP -= 2;
+}
+
 void cpu_Run(Cpu *pCpu){
 	uint8_t opcode;
 	uint8_t *byte = NULL;
+	uint8_t bit, r1, r2, mask, dummy;
+	uint16_t word;
+	uint8_t jump = 0;
 
 	// TODO: Check for interrupt
 
@@ -128,20 +170,900 @@ void cpu_Run(Cpu *pCpu){
 	}
 
 	// TODO: Execute all opcodes
-	// TODO: Fix all (HL) instructions that read data from RAM, currently these are commented out
-	if (pCpu->extended){ // page1 opcodes
-		uint8_t bit, r, mask, dummy;
+	if (!pCpu->extended){ // page0 opcodes
+		switch (opcode){
+			case 0x00:
+				// NOP
+				break;
+
+			/* Increase instructions */
+			case 0x03: // INC BC
+			case 0x13: // INC DE
+			case 0x23: // INC HL
+			case 0x33: // INC SP
+				r1 = ((opcode & 0xF0) >> 4);
+				*(pCpu->dreg[r1])++;
+				break;
+
+			case 0x04: // INC B
+			case 0x0C: // INC C
+			case 0x14: // INC D
+			case 0x1C: // INC E
+			case 0x24: // INC H
+			case 0x2C: // INC L
+			case 0x3C: // INC A
+				pCpu->FLAG_bits.N = 0;
+				r1 = ((opcode >> 4) & 0x0F) * 2 + (opcode & 0x0F) == 0x0C ? 1: 0;
+				dummy = (pCpu->reg[r1]->R & 0x0F) + 1;
+				pCpu->reg[r1]->R++;
+				pCpu->FLAG_bits.H = dummy > 0xF;
+				pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
+				break;
+			case 0x34: // INC (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				dummy = (pCpu->data_bus & 0x0F) + 1;
+				*byte = pCpu->data_bus++;
+				pCpu->FLAG_bits.H = dummy > 0xF;
+				pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
+				break;
+
+			/* Decrease instructions */
+			case 0x05: // DEC B
+			case 0x0D: // DEC C
+			case 0x15: // DEC D
+			case 0x1D: // DEC E
+			case 0x25: // DEC H
+			case 0x2D: // DEC L
+			case 0x3D: // DEC A
+				pCpu->FLAG_bits.N = 1;
+				r1 = ((opcode >> 4) & 0x0F) * 2 + (opcode & 0x0F) == 0x0D ? 1: 0;
+				dummy = pCpu->reg[r1]->R & 0x10;
+				pCpu->reg[r1]->R--;
+				pCpu->FLAG_bits.H = dummy == 0x10;
+				pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
+				break;
+			case 0x35: // DEC (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				dummy = pCpu->data_bus & 0x10;
+				*byte = pCpu->data_bus--;
+				pCpu->FLAG_bits.H = dummy == 0x10;
+				pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
+				break;
+
+			case 0x0B: // DEC BC
+			case 0x1B: // DEC DE
+			case 0x2B: // DEC HL
+			case 0x3B: // DEC SP
+				r1 = ((opcode & 0xF0) >> 4);
+				*(pCpu->dreg[r1])--;
+				break;
+
+			/* Add instructions */
+			case 0x80: // ADD A, B
+			case 0x81: // ADD A, C
+			case 0x82: // ADD A, D
+			case 0x83: // ADD A, E
+			case 0x84: // ADD A, H
+			case 0x85: // ADD A, L
+			case 0x87: // ADD A, A
+				r1 = opcode & 0x0F;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = (pCpu->reg[r1]->R + pCpu->A) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->reg[r1]->R & 0x0F) + (pCpu->A & 0x0F)) > 0x0F;
+				pCpu->A += pCpu->reg[r1]->R;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x86: // ADD A, (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = (pCpu->data_bus + pCpu->A) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->data_bus & 0x0F) + (pCpu->A & 0x0F)) > 0x0F;
+				pCpu->A += pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xC6: // ADD A, n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = (pCpu->data_bus + pCpu->A) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->data_bus & 0x0F) + (pCpu->A & 0x0F)) > 0x0F;
+				pCpu->A += pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			case 0xE8: // ADD SP, n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = (pCpu->data_bus + pCpu->A) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->data_bus & 0x0F) + (pCpu->A & 0x0F)) > 0x0F;
+				pCpu->SP += pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			case 0x09: // ADD HL, BC
+			case 0x19: // ADD HL, DE
+			case 0x29: // ADD HL, HL
+			case 0x39: // ADD HL, SP
+				r1 = ((opcode & 0xF0) >> 4);
+				pCpu->FLAG_bits.N = 0;
+				word = (pCpu->HL & 0xFFF) + (*(pCpu->dreg[r1]) & 0xFFF);
+				pCpu->FLAG_bits.H = word > 0xFFF;
+				pCpu->FLAG_bits.C = (pCpu->HL + *(pCpu->dreg[r1])) > 0xFFFF;
+				pCpu->HL += *(pCpu->dreg[r1]);
+				break;
+
+			/* Add with carry instructions */
+			case 0x88: // ADC A, B
+			case 0x89: // ADC A, C
+			case 0x8A: // ADC A, D
+			case 0x8B: // ADC A, E
+			case 0x8C: // ADC A, H
+			case 0x8D: // ADC A, L
+			case 0x8F: // ADC A, A
+				r1 = opcode & 0x0F;
+				pCpu->FLAG_bits.N = 0;
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = (pCpu->reg[r1]->R + pCpu->A + dummy) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->reg[r1]->R & 0x0F) + ((pCpu->A & 0x0F) + dummy)) > 0x0F;
+				pCpu->A += pCpu->reg[r1]->R + dummy;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x8E: // ADC A, (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = (pCpu->data_bus + pCpu->A + dummy) > 0xFF;
+				pCpu->FLAG_bits.H = ((pCpu->data_bus & 0x0F) + ((pCpu->A & 0x0F) + dummy)) > 0x0F;
+				pCpu->A += pCpu->data_bus + dummy;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Sub instructions */
+			case 0x90: // SUB B
+			case 0x91: // SUB C
+			case 0x92: // SUB D
+			case 0x93: // SUB E
+			case 0x94: // SUB H
+			case 0x95: // SUB L
+			case 0x97: // SUB A
+				r1 = opcode & 0x0F;
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->reg[r1]->R & 0x0F);
+				pCpu->A -= pCpu->reg[r1]->R;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x96: // SUB (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->A -= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xD6: // SUB n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->A -= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Sub with carry instructions */
+			case 0x98: // SBC B
+			case 0x99: // SBC C
+			case 0x9A: // SBC D
+			case 0x9B: // SBC E
+			case 0x9C: // SBC H
+			case 0x9D: // SBC L
+			case 0x9F: // SBC A
+				r1 = opcode & 0x0F;
+				pCpu->FLAG_bits.N = 1;
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->reg[r1]->R & 0x0F);
+				pCpu->A -= (pCpu->reg[r1]->R + dummy);
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x9E: // SBC (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->A -= (pCpu->data_bus + dummy);
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xDE: // SBC A, n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->A -= (pCpu->data_bus + dummy);
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Load instructions */
+			case 0x06: // LD B, n
+			case 0x0E: // LD C, n
+			case 0x16: // LD D, n
+			case 0x1E: // LD E, n
+			case 0x26: // LD H, n
+			case 0x2E: // LD L, n
+			case 0x3E: // LD A, n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				r1 = ((opcode & 0xF0) >> 4) * 2 + (opcode & 0xF) == 0x0E ? 1 : 0;
+				pCpu->reg[r1]->R = pCpu->data_bus;
+				break;
+			case 0x36: // LD (HL), n
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->address_bus = pCpu->PC + 1;
+				cpu_GetByte(pCpu);
+				*byte = pCpu->data_bus;
+				break;
+
+			case 0x01: // LD BC, nn
+			case 0x11: // LD DE, nn
+			case 0x21: // LD HL, nn
+			case 0x31: // LD SP, nn
+				r1 = ((opcode & 0xF0) >> 4);
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				*(pCpu->dreg[r1]) = word;
+				break;
+
+			case 0x02: // LD (BC), A
+			case 0x12: // LD (DE), A
+				r1 = ((opcode & 0xF0) >> 4);
+				pCpu->address_bus = *(pCpu->dreg[r1]);
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				break;
+			case 0x77: // LD (HL), A
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				break;
+			case 0xEA: // LD (nn), A
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				pCpu->address_bus = word;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				break;
+
+			case 0x08: // LD nn, SP
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				pCpu->address_bus = word;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->SP;
+				break;
+
+			case 0x0A: // LD A, (BC)
+				pCpu->address_bus = pCpu->BC;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+			case 0x1A: // LD A, (DE)
+				pCpu->address_bus = pCpu->DE;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+			case 0xFA: // LD A, (nn)
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				pCpu->address_bus = word;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+
+			case 0x40: // LD B, B
+			case 0x41: // LD B, C
+			case 0x42: // LD B, D
+			case 0x43: // LD B, E
+			case 0x44: // LD B, H
+			case 0x45: // LD B, L
+			case 0x47: // LD B, A
+			case 0x48: // LD C, B
+			case 0x49: // LD C, C
+			case 0x4A: // LD C, D
+			case 0x4B: // LD C, E
+			case 0x4C: // LD C, H
+			case 0x4D: // LD C, L
+			case 0x4F: // LD C, A
+			case 0x50: // LD D, B
+			case 0x51: // LD D, C
+			case 0x52: // LD D, D
+			case 0x53: // LD D, E
+			case 0x54: // LD D, H
+			case 0x55: // LD D, L
+			case 0x57: // LD D, A
+			case 0x58: // LD E, B
+			case 0x59: // LD E, C
+			case 0x5A: // LD E, D
+			case 0x5B: // LD E, E
+			case 0x5C: // LD E, H
+			case 0x5D: // LD E, L
+			case 0x5F: // LD E, A
+			case 0x60: // LD H, B
+			case 0x61: // LD H, C
+			case 0x62: // LD H, D
+			case 0x63: // LD H, E
+			case 0x64: // LD H, H
+			case 0x65: // LD H, L
+			case 0x67: // LD H, A
+			case 0x68: // LD L, B
+			case 0x69: // LD L, C
+			case 0x6A: // LD L, D
+			case 0x6B: // LD L, E
+			case 0x6C: // LD L, H
+			case 0x6D: // LD L, L
+			case 0x6F: // LD L, A
+			case 0x78: // LD A, B
+			case 0x79: // LD A, C
+			case 0x7A: // LD A, D
+			case 0x7B: // LD A, E
+			case 0x7C: // LD A, H
+			case 0x7D: // LD A, L
+			case 0x7F: // LD A, A
+				r1 = ((opcode & 0xF0) >> 4) - 0x04 + ((opcode & 0xF) > 0x7 ? 1 : 0);
+				r2 = (opcode & 0x0F) - 0x08;
+				pCpu->reg[r1]->R = pCpu->reg[r2]->R;
+				break;
+
+			case 0x70: // LD (HL), B
+			case 0x71: // LD (HL), C
+			case 0x72: // LD (HL), D
+			case 0x73: // LD (HL), E
+			case 0x74: // LD (HL), H
+			case 0x75: // LD (HL), L
+				r1 = opcode & 0x0F;
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->reg[r1]->R;
+				break;
+
+			case 0x46: // LD B, (HL)
+			case 0x4E: // LD C, (HL)
+			case 0x56: // LD D, (HL)
+			case 0x5E: // LD E, (HL)
+			case 0x66: // LD H, (HL)
+			case 0x6E: // LD L, (HL)
+			case 0x7E: // LD A, (HL)
+				r1 = ((opcode & 0xF0) >> 4) - 0x04 + ((opcode & 0x0F) == 0x0E ? 1 : 0);
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+
+			case 0x22: // LD (HL+), A
+			case 0x32: // LD (HL-), A
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				pCpu->HL += (opcode & 0xF0) == 0x20 ? 1 : -1;
+				break;
+			case 0x2A: // LD A, (HL+)
+			case 0x3A: // LD A, (HL-)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				pCpu->HL += (opcode & 0xF0) == 0x20 ? 1 : -1;
+				break;
+
+			case 0xE0: // LDH ($FF00 + n), A
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->address_bus = 0xFF00 + pCpu->data_bus;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				break;
+			case 0xE2: // LD (C), A
+				pCpu->address_bus = 0xFF00 + pCpu->C;
+				byte = cpu_GetByte(pCpu);
+				*byte = pCpu->A;
+				break;
+
+			case 0xF0: // LDH A, ($FF00 + n)
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->address_bus = 0xFF00 + pCpu->data_bus;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+			case 0xF2: // LD A, (C)
+				pCpu->address_bus = 0xFF00 + pCpu->C;
+				byte = cpu_GetByte(pCpu);
+				pCpu->A = pCpu->data_bus;
+				break;
+
+			case 0xF8: // LD HL, SP + n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.Z = 0;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = (pCpu->SP + pCpu->data_bus) > 0xFFFF;
+				pCpu->FLAG_bits.H = ((pCpu->SP & 0xFFF) + pCpu->data_bus) > 0x0FFF;
+				pCpu->HL = pCpu->SP + pCpu->data_bus;
+				break;
+
+			case 0xF9: // LD SP, HL
+				pCpu->SP = pCpu->HL;
+				break;
+
+
+			/* And instructions */
+			case 0xA0: // AND B
+			case 0xA1: // AND C
+			case 0xA2: // AND D
+			case 0xA3: // AND E
+			case 0xA4: // AND L
+			case 0xA5: // AND H
+			case 0xA7: // AND A
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 1;
+				r1 = opcode & 0x0F;
+				pCpu->A &= pCpu->reg[r1]->R;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xA6: // AND (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 1;
+				pCpu->A &= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xE6: // AND n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 1;
+				pCpu->A &= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+
+			/* Xor instructions */
+			case 0xA8: // XOR B
+			case 0xA9: // XOR C
+			case 0xAA: // XOR D
+			case 0xAB: // XOR E
+			case 0xAC: // XOR H
+			case 0xAD: // XOR L
+			case 0xAF: // XOR A
+				r1 = (opcode & 0x0F) - 0x08;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->A ^= pCpu->reg[r1]->R;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xAE: // XOR (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->A ^= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xEE: // XOR n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->A ^= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Or instructions */
+			case 0xB0: // OR B
+			case 0xB1: // OR C
+			case 0xB2: // OR D
+			case 0xB3: // OR E
+			case 0xB4: // OR H
+			case 0xB5: // OR L
+			case 0xB7: // OR A
+				r1 = opcode & 0x0F;
+				pCpu->A |= pCpu->reg[r1]->R;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xB6: // OR (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->A |= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0xF6: // OR n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				pCpu->FLAG_bits.C = 0;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->A |= pCpu->data_bus;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Compare instructions */
+			case 0xB8: // CP B
+			case 0xB9: // CP C
+			case 0xBA: // CP D
+			case 0xBB: // CP E
+			case 0xBC: // CP H
+			case 0xBD: // CP L
+			case 0xBF: // CP A
+				r1 = (opcode & 0x0F) - 0x08;
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->reg[r1]->R & 0x0F);
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
+				pCpu->FLAG_bits.Z = pCpu->A == pCpu->reg[r1]->R;
+				break;
+			case 0xBE: // CP (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.Z = pCpu->A == pCpu->data_bus;
+				break;
+			case 0xFE: // CP n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->data_bus & 0x0F);
+				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->data_bus & 0xF0);
+				pCpu->FLAG_bits.Z = pCpu->A == pCpu->data_bus;
+				break;
+
+			/* Rotate Instructions */
+			case 0x0F: // RRCA - 9 bit rotate right
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = pCpu->A & 0x01;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->A = (pCpu->A >> 1 & 0x7F) | dummy << 7;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x1F: // RRA
+				pCpu->FLAG_bits.C = pCpu->A & 0x01;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->A = (pCpu->A >> 1 & 0x7F) | pCpu->FLAG_bits.C << 7;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x07: // RLCA - 9 bit rotate left
+				dummy = pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.C = pCpu->A & 0x80;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->A = (pCpu->A << 1 & 0xFE) | dummy;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+			case 0x17: // RLA - 8 bit rotate left
+				pCpu->FLAG_bits.C = pCpu->A & 0x80;
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.N = 0;
+				pCpu->A = (pCpu->A << 1 & 0xFE) | pCpu->FLAG_bits.C;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Stop instruction */
+			case 0x10: // STOP
+				pCpu->stop = 1;
+				break;
+
+			/* Halt instruction */
+			case 0x76:
+				pCpu->halt = 1;
+				break;
+
+			/* Jump relatif instructions */
+			case 0x18: // JR n
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				pCpu->PC += pCpu->data_bus;
+				jump = 1;
+				break;
+			case 0x20: // JR NZ
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				if (pCpu->FLAG_bits.Z != 0){
+					pCpu->PC += pCpu->data_bus;
+					jump = 1;
+				}
+				break;
+			case 0x28: // JR Z
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				if (pCpu->FLAG_bits.Z){
+					pCpu->PC += pCpu->data_bus;
+					jump = 1;
+				}
+				break;
+			case 0x30: // JR NC
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				if (pCpu->FLAG_bits.C != 0){
+					pCpu->PC += pCpu->data_bus;
+					jump = 1;
+				}
+				break;
+			case 0x38: // JR C
+				pCpu->address_bus = pCpu->PC + 1;
+				byte = cpu_GetByte(pCpu);
+				if (pCpu->FLAG_bits.C){
+					pCpu->PC += pCpu->data_bus;
+					jump = 1;
+				}
+				break;
+
+			/* Jump absolute instructions */
+			case 0xC3: // JP nnnn
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				pCpu->PC = word;
+				jump = 1;
+				break;
+			case 0xC2: // JP NZ, nnnn
+				if (pCpu->FLAG_bits.Z == 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xCA: // JP Z, nnnn
+				if (pCpu->FLAG_bits.Z != 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xD2: // JP NC, nnnn
+				if (pCpu->FLAG_bits.C == 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xDA: // JP C, nnnn
+				if (pCpu->FLAG_bits.C != 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xE9: // JP (HL)
+				pCpu->PC = pCpu->HL;
+				jump = 1;
+				break;
+
+			/* Call instructions */
+			case 0xCD: // CALL nnnn
+				pCpu->address_bus = pCpu->PC + 1;
+				word = cpu_GetWordFromPC(pCpu);
+				cpu_Push(pCpu, pCpu->PC);
+				pCpu->PC = word;
+				jump = 1;
+				break;
+			case 0xC4: // CALL NZ, nnnn
+				if (pCpu->FLAG_bits.Z == 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					cpu_Push(pCpu, pCpu->PC);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xCC: // CALL Z, nnnn
+				if (pCpu->FLAG_bits.Z != 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					cpu_Push(pCpu, pCpu->PC);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xD4: // CALL NC, nnnn
+				if (pCpu->FLAG_bits.C == 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					cpu_Push(pCpu, pCpu->PC);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xDC: // CALL C, nnnn
+				if (pCpu->FLAG_bits.C != 0){
+					pCpu->address_bus = pCpu->PC + 1;
+					word = cpu_GetWordFromPC(pCpu);
+					cpu_Push(pCpu, pCpu->PC);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+
+			/* Return instructions */
+			case 0xC0: // RET NZ
+				if (pCpu->FLAG_bits.Z == 0){
+					word = cpu_Pop(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xC8: // RET Z
+				if (pCpu->FLAG_bits.Z != 0){
+					word = cpu_Pop(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xC9: // RET
+				word = cpu_Pop(pCpu);
+				pCpu->PC = word;
+				jump = 1;
+				break;
+			case 0xD0: // RET NC
+				if (pCpu->FLAG_bits.C == 0){
+					word = cpu_Pop(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xD8: // RET C
+				if (pCpu->FLAG_bits.C != 0){
+					word = cpu_Pop(pCpu);
+					pCpu->PC = word;
+					jump = 1;
+				}
+				break;
+			case 0xD9: // RETI
+				// Restore master interrupt enable flag to its pre-interrupt status
+				// TODO RETI
+				DEBUG_PRINTF("TODO RETI\n");
+				break;
+
+			/* Reset instructions */
+			case 0xC7: // RST $0000
+			case 0xCF: // RST $0008
+			case 0xD7: // RST $0010
+			case 0xDF: // RST $0018
+			case 0xE7: // RST $0020
+			case 0xEF: // RST $0028
+			case 0xF7: // RST $0030
+			case 0xFF: // RST $0038
+				cpu_Push(pCpu, pCpu->PC);
+				r1 = (((opcode & 0xF0) >> 4) - 0xC) * 0x10;
+				r2 = (opcode & 0x0F) == 0x0F ? 0x08 : 0x00;
+				pCpu->PC = r1 << 8 | r2;
+				jump = 1;
+				break;
+
+			/* Pop instructions */
+			case 0xC1: // POP BC
+			case 0xD1: // POP DE
+			case 0xE1: // POP HL
+				r1 = ((opcode & 0xF0) >> 4) - 0xC;
+				*(pCpu->dreg[r1]) = cpu_Pop(pCpu);
+				break;
+			case 0xF1: // POP AF
+				pCpu->AF = cpu_Pop(pCpu);
+				break;
+
+			/* Push instructions */
+			case 0xC5: // Push BC
+			case 0xD5: // Push DE
+			case 0xE5: // Push HL
+				r1 = ((opcode & 0xF0) >> 4) - 0xC;
+				cpu_Push(pCpu, *(pCpu->dreg[r1]));
+				break;
+			case 0xF5: // Push AF
+				cpu_Push(pCpu, pCpu->AF);
+				break;
+
+			/* Decimal Adjust instruction */
+			case 0x27: // DAA
+				if (((pCpu->A & 0x0F) > 0x09) || pCpu->FLAG_bits.H)
+					pCpu->A += 0x06;
+				if (((pCpu->A & 0xF0) > 0x90) || pCpu->FLAG_bits.C){
+					pCpu->A += 0x60;
+					pCpu->FLAG_bits.C = 1;
+				}else{
+					pCpu->FLAG_bits.C = 0;
+				}
+				pCpu->FLAG_bits.H = 0;
+				pCpu->FLAG_bits.Z = pCpu->A == 0;
+				break;
+
+			/* Complement instruction */
+			case 0x2F: // CPL
+				pCpu->A = ~pCpu->A;
+				pCpu->FLAG_bits.N = 1;
+				pCpu->FLAG_bits.H = 1;
+				break;
+
+			/* Carry set/reset instructions */
+			case 0x37: // SCF
+				pCpu->FLAG_bits.C = 1;
+				break;
+			case 0x3F: // CCF
+				pCpu->FLAG_bits.C = 0;
+				break;
+
+			/* Disable/Enable Interrupt instruction */
+			// TODO : check if this is correct
+			case 0xF3:
+				pCpu->ie_reg->IE = 0;
+				break;
+			case 0xFB:
+				pCpu->ie_reg->IE = 0xFF;
+				break;
+
+			/* Illegal instructions */
+			case 0xD3:
+			case 0xDB:
+			case 0xDD:
+			case 0xE3:
+			case 0xE4:
+			case 0xEB:
+			case 0xEC:
+			case 0xED:
+			case 0xF4:
+			case 0xFC:
+			case 0xFD:
+				DEBUG_PRINTF("Illegal instruction %02X\n", opcode);
+				break;
+
+			default:
+				DEBUG_PRINTF("Instruction 0x%02X not yet implemented.\n", opcode);
+				break;
+		}
+		// increase clock cycle and PC
+		pCpu->clock_cycle += page0[pCpu->PC].clock_cycles;
+		if (!jump && !pCpu->halt && !pCpu->stop)
+			pCpu->PC += page0[pCpu->PC].size;
+	}else{
 		switch (opcode & 0xF8){
 			case 0x00: // RLC 9 bit rotate left with carry
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 				dummy = pCpu->FLAG_bits.C;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_7;
-					pCpu->reg[r]->R = dummy | ((pCpu->reg[r]->R << 1) & 0xFE);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_7;
+					pCpu->reg[r1]->R = dummy | ((pCpu->reg[r1]->R << 1) & 0xFE);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -159,11 +1081,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.H = 0;
 				dummy = pCpu->FLAG_bits.C;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_0;
-					pCpu->reg[r]->R = (dummy << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_0;
+					pCpu->reg[r1]->R = (dummy << 7) | ((pCpu->reg[r1]->R >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -180,11 +1102,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_7;
-					pCpu->reg[r]->R = pCpu->FLAG_bits.C | ((pCpu->reg[r]->R << 1) & 0xFE);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_7;
+					pCpu->reg[r1]->R = pCpu->FLAG_bits.C | ((pCpu->reg[r1]->R << 1) & 0xFE);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -201,11 +1123,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_0;
-					pCpu->reg[r]->R = (pCpu->FLAG_bits.C << 7) | ((pCpu->reg[r]->R >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_0;
+					pCpu->reg[r1]->R = (pCpu->FLAG_bits.C << 7) | ((pCpu->reg[r1]->R >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -222,11 +1144,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_7;
-					pCpu->reg[r]->R = (pCpu->reg[r]->R << 1) & 0xFE;
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_7;
+					pCpu->reg[r1]->R = (pCpu->reg[r1]->R << 1) & 0xFE;
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -243,11 +1165,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_0;
-					pCpu->reg[r]->R = (0x80 & pCpu->reg[r]->R) | ((pCpu->reg[r]->R >> 1) & 0x7F);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_0;
+					pCpu->reg[r1]->R = (0x80 & pCpu->reg[r1]->R) | ((pCpu->reg[r1]->R >> 1) & 0x7F);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -267,10 +1189,10 @@ void cpu_Run(Cpu *pCpu){
 
 #define SWAP(x) (x) = ((((x) & 0xF0) >> 4) | (((x) & 0x0F) << 4))
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					SWAP(pCpu->reg[r]->R);
-					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R);
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					SWAP(pCpu->reg[r1]->R);
+					pCpu->FLAG_bits.Z = !(pCpu->reg[r1]->R);
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -286,11 +1208,11 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 0;
 
-				r = opcode & 0x07;
-				if (r != 0x06){
-					pCpu->FLAG_bits.C = pCpu->reg[r]->R_bits.bit_0;
-					pCpu->reg[r]->R = 0x7F & (pCpu->reg[r]->R >> 1);
-					pCpu->FLAG_bits.Z = pCpu->reg[r]->R == 0;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06){
+					pCpu->FLAG_bits.C = pCpu->reg[r1]->R_bits.bit_0;
+					pCpu->reg[r1]->R = 0x7F & (pCpu->reg[r1]->R >> 1);
+					pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
 				}else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -318,9 +1240,9 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 1;
 
-				r = opcode & 0x07;
-				if (r != 0x06)
-					pCpu->FLAG_bits.Z = !(pCpu->reg[r]->R & mask);
+				r1 = opcode & 0x07;
+				if (r1 != 0x06)
+					pCpu->FLAG_bits.Z = !(pCpu->reg[r1]->R & mask);
 				else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -343,9 +1265,9 @@ void cpu_Run(Cpu *pCpu){
 				bit = bit + (opcode & 0x08) ? 1 : 0;
 				mask = 1 << bit;
 
-				r = opcode & 0x07;
-				if (r != 0x06)
-					pCpu->reg[r]->R &= ~mask;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06)
+					pCpu->reg[r1]->R &= ~mask;
 				else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -368,9 +1290,9 @@ void cpu_Run(Cpu *pCpu){
 				bit = bit + (opcode & 0x08) ? 1 : 0;
 				mask = 1 << bit;
 
-				r = opcode & 0x07;
-				if (r != 0x06)
-					pCpu->reg[r]->R |= mask;
+				r1 = opcode & 0x07;
+				if (r1 != 0x06)
+					pCpu->reg[r1]->R |= mask;
 				else{
 					pCpu->address_bus = pCpu->HL;
 					byte = cpu_GetByte(pCpu);
@@ -390,13 +1312,5 @@ void cpu_Run(Cpu *pCpu){
 		// increase clock cycle and PC
 		pCpu->clock_cycle += page1[pCpu->PC + 1].clock_cycles;
 		pCpu->PC += page1[pCpu->PC + 1].size;
-	}else{ // page0 opcodes
-		switch (opcode){
-            default:
-                break;
-		}
-		// increase clock cycle and PC
-		pCpu->clock_cycle += page0[pCpu->PC].clock_cycles;
-		pCpu->PC += page0[pCpu->PC].size;
 	}
 }
