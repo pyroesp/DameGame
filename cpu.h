@@ -15,9 +15,12 @@
 
 */
 
+// Number of bytes
 #define REG_BYTE (8)
-#define REG_WORD (4)
+// Number of words
+#define REG_WORD (5)
 
+// Register constants
 #define REG_B (0)
 #define REG_C (1)
 #define REG_D (2)
@@ -27,13 +30,16 @@
 #define REG_A (7)
 #define REG_F (6)
 
+// Double register constants
 #define REG_BC (0)
 #define REG_DE (1)
 #define REG_HL (2)
 #define REG_SP (3)
+#define REG_AF (4)
 
+// Cpu register union
 union Cpu_Register{
-	uint8_t R;
+	uint8_t R; // register value
 	struct{
 		uint8_t bit_0 : 1;
 		uint8_t bit_1 : 1;
@@ -44,12 +50,14 @@ union Cpu_Register{
 		uint8_t bit_5 : 1;
 		uint8_t bit_6 : 1;
 		uint8_t bit_7 : 1;
-	}R_bits;
+	}R_bits; // register bits
 };
 
+// Cpu structure
 typedef struct{
 	uint64_t clock_cycle; // 4 x machine cycle
 
+	// Cpu work registers
 	union{
 		uint16_t BC;
 		struct{
@@ -100,15 +108,16 @@ typedef struct{
 			uint8_t A;
 		};
 	};
-	union Cpu_Register *reg[REG_BYTE];
-	uint16_t *dreg[REG_WORD];
+	union Cpu_Register *reg[REG_BYTE]; // register poiner array to help execute instructions
+	uint16_t *dreg[REG_WORD]; // double register array
 
 	uint16_t SP; // decrements before putting something on the stack
-	uint16_t PC;
+	uint16_t PC; // current instruction to execute address
 
 	uint16_t address_bus;
 	uint8_t data_bus;
-	uint8_t extended;
+
+	uint8_t extended; // extended instruction set flag
 
 	MemoryMap *map;
 
@@ -119,11 +128,15 @@ typedef struct{
 	uint8_t halt; // set by HALT instruction
 }Cpu;
 
-
+// Initializes and returns a Cpu structure
 Cpu* cpu_Init(void);
+// Free a Cpu structure
 void cpu_Free(Cpu *pCpu);
+// Reset Cpu
 void cpu_Reset(Cpu *pCpu);
+// Setup special register union
 void cpu_SetSpecialRegisters(Cpu *pCpu, uint8_t *pMem);
+// Setup interrupt enable register union
 void cpu_SetInterruptEnableRegister(Cpu *pCpu, uint8_t *pMem);
 
 // Returns pointer to byte, value of byte stored in data_bus
@@ -131,9 +144,12 @@ uint8_t* cpu_GetByte(Cpu *pCpu);
 // Returns word value from PC, no pointer
 uint16_t cpu_GetWordFromPC(Cpu *pCpu);
 
+// Opcode pop from SP
 uint16_t cpu_Pop(Cpu *pCpu);
+// Opcode push to SP
 void cpu_Push(Cpu *pCpu, uint16_t var);
 
+// Fetch, decode and execute instruction
 void cpu_Run(Cpu *pCpu);
 
 #endif
