@@ -6,8 +6,11 @@
 	Point to address $FF00 in the CPU address space.
 */
 
+#include <stdint.h>
+
+// Special register union
 union Special_Register{
-	uint8_t reg[0x51]; /* point to FF00 in the memory */
+	uint8_t reg[0x51]; // point to FF00 in the memory
 	struct{
 		union{
 			uint8_t P1; // Reading joypad FF00
