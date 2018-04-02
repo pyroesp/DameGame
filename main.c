@@ -4,53 +4,39 @@
 #include "vm.h"
 
 int main(int argc, char *argv[]){
+	int i;
+	uint8_t test_logo[48] = { // Nintendo Logo
+	    0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b,
+	    0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d,
+	    0x00, 0x08, 0x11, 0x1f, 0x88, 0x89, 0x00, 0x0e,
+	    0xdc, 0xcc, 0x6e, 0xe6, 0xdd, 0xdd, 0xd9, 0x99,
+	    0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc,
+	    0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e
+    };
 	VM *vm = NULL;
 	vm = vm_Init();
+	if (vm_LoadBios(vm, "bios/bios.gb") != 0){
+        // TODO: Setup cpu and memory as if the bios just executed
+		return -1;
+	}
 
-	vm->cpu->sfr->BIOS = 1; // disable BIOS for now
+	// Test if the bios checks the logo correctly
+    if (mem_WriteMulti(vm->ROM, 0x104, test_logo, 48) == 0x100)
+        return -1;
 
-    // Write some opcodes into ROM
-	vm->ROM->data[0] = 0x00; // NOP
-	vm->ROM->data[1] = 0xCB;
-	vm->ROM->data[2] = 0x88; // clear bit 1 of reg B
-	vm->ROM->data[3] = 0xCB;
-	vm->ROM->data[4] = 0x80; // clear bit 0 of reg B
-	vm->ROM->data[5] = 0xCB;
-	vm->ROM->data[6] = 0x31; // swap reg C
+    // Display bios memory
+	for (i = 1; i < MEM_ROM_BIOS_SIZE + 1; i++){
+		DEBUG_PRINTF("%02X ", vm->BIOS->data[i - 1]);
+		if (i % 16 == 0)
+            DEBUG_PRINTF("\n");
+	}
 
-	vm->cpu->B = 0xFF;
-	vm->cpu->C = 0xAB;
+	// Run until bios is disabled -> gets stuck on a wait for vertical blank loop
+	for(i = 0; vm->cpu->sfr->BIOS == 0; i++){
+		cpu_Run(vm->cpu);
+    }
 
-	DEBUG_PRINTF("cpu->BC = #%04X\n", vm->cpu->BC); // result should be 0xFFAB
-
-	cpu_Run(vm->cpu); // NOP
-	cpu_Run(vm->cpu); // clear bit 1 of reg B
-	cpu_Run(vm->cpu); // clear bit 0 of reg B
-	cpu_Run(vm->cpu); // swap C
-
-	DEBUG_PRINTF("cpu->B = #%02X\n", vm->cpu->B); // result should be 0xFD
-	// Checking if double register have the correct endianness (reg B = MSB, reg C = LSB)
-	DEBUG_PRINTF("cpu->BC = #%04X\n", vm->cpu->BC); // result should be 0xBA
-	// Checking if reg array is correctly aligned with the registers
-	DEBUG_PRINTF("cpu->reg[B] = #%02X\n", vm->cpu->reg[0]->R);
-	DEBUG_PRINTF("cpu->reg[C] = #%02X\n", vm->cpu->reg[1]->R);
-	// Checking bits are correct
-	DEBUG_PRINTF("cpu->reg[B].0 = #%02X\n", vm->cpu->reg[0]->R_bits.bit_0);
-	DEBUG_PRINTF("cpu->reg[B].1 = #%02X\n", vm->cpu->reg[0]->R_bits.bit_1);
-	DEBUG_PRINTF("cpu->reg[B].2 = #%02X\n", vm->cpu->reg[0]->R_bits.bit_2);
-	DEBUG_PRINTF("cpu->reg[B].3 = #%02X\n", vm->cpu->reg[0]->R_bits.bit_3);
-	DEBUG_PRINTF("cpu->reg[C].0 = #%02X\n", vm->cpu->reg[1]->R_bits.bit_0);
-	DEBUG_PRINTF("cpu->reg[C].1 = #%02X\n", vm->cpu->reg[1]->R_bits.bit_1);
-	DEBUG_PRINTF("cpu->reg[C].2 = #%02X\n", vm->cpu->reg[1]->R_bits.bit_2);
-	DEBUG_PRINTF("cpu->reg[C].3 = #%02X\n", vm->cpu->reg[1]->R_bits.bit_3);
-
-	// Checking if Special register and corresponding bits are correct
-	vm->cpu->sfr->NR_50_bits.S01_volume = 0x4;
-	vm->cpu->sfr->NR_50_bits.S02_volume = 0x1;
-	DEBUG_PRINTF("cpu->sfr->NR_50_bits.S01_volume = #%02X\n", vm->cpu->sfr->NR_50_bits.S01_volume);
-	DEBUG_PRINTF("cpu->sfr->NR_50_bits.S02_volume = #%02X\n", vm->cpu->sfr->NR_50_bits.S02_volume);
-
-    DEBUG_PRINTF("Free stuff & exit\n");
+    DEBUG_PRINTF("\nFree stuff & exit\n");
 	vm_Free(vm);
 	return 0;
 }
