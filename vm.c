@@ -1,6 +1,5 @@
 #include "vm.h"
 
-
 VM* vm_Init(void){
 	VM *vm = NULL;
 	Cpu *cpu = NULL;
@@ -82,6 +81,7 @@ VM* vm_Init(void){
 
     // Set SFR pointer
 	cpu_SetSpecialRegisters(cpu, cpu->map[MAP_IO_PORTS].mem.data);
+	cpu->sfr->BIOS = 0;
 	// Set IE register
 	cpu_SetInterruptEnableRegister(cpu, &Internal_RAM->data[MEM_IE_REG_OFFSET - MEM_RAM_INTERNAL_OFFSET]);
 
@@ -95,6 +95,26 @@ VM* vm_Init(void){
 	vm->cpu = cpu;
 
 	return vm;
+}
+
+int vm_LoadBios(VM *pVm, char *path){
+	uint16_t fsize = 0, bsize = 0;
+	uint8_t *p;
+	FILE *bios = NULL;
+	bios = fopen(path, "rb");
+	if (!bios)
+		return -1;
+	for (fsize = 0; fgetc(bios) != EOF; fsize++);
+	rewind(bios);
+
+	if (fsize != MEM_ROM_BIOS_SIZE){
+		fclose(bios);
+		return -2;
+	}
+
+	for (p = pVm->BIOS->data; bsize < fsize; *p = fgetc(bios), p++, bsize++);
+	fclose(bios);
+	return 0;
 }
 
 void vm_Free(VM *pVm){

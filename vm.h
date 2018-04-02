@@ -2,6 +2,7 @@
 #define _VM_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include "debug.h"
 #include "rom.h"
 #include "ram.h"
@@ -9,6 +10,7 @@
 #include "memory_map.h"
 #include "cpu.h"
 
+// Virtual Machine structure
 typedef struct{
 	Memory *BIOS;
 	Memory *ROM;
@@ -18,7 +20,11 @@ typedef struct{
 	Cpu *cpu;
 }VM;
 
+// Initialize and return a VM structure
 VM* vm_Init(void);
+// Load bios to VM
+int vm_LoadBios(VM *pVm, char *path);
+// Free bios
 void vm_Free(VM *pVm);
 
 #endif
