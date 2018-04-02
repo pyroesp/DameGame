@@ -13,19 +13,21 @@
 	before the IE register is set.
 */
 
+// Interrupt Priority enumeration
 enum{
 	prio_vblank = 1,
 	prio_lcdc,
 	prio_timer_overflow,
 	prio_serial_transfer,
 	prio_p1_io
-}Priority;
+}Int_Priority;
 
 /*
 	Use as union Interrupt_Enable *ie_reg;
 	Point to address $FF00 in the CPU address space.
 */
 
+// Interrupt enable union
 union Interrupt_Enable{
 	uint8_t IE; // $FFFF
 	struct{
