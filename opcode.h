@@ -5,17 +5,18 @@
 
 #define OPCODE_EXTENDED (0xCB)
 
+// Opcode type enumeration
 enum OPCODE_TYPE{
 	NONE,
 	IMMEDIATE,
 	INDIRECT,
 	ABSOLUTE,
-	RELATIF,
+	RELATIVE,
 	EXTENDED, // Go to page1 for rest of opcode
 	ILLEGAL // Illegal opcode
 };
 
-
+// Opcode structure
 typedef struct{
 	uint8_t opcode;
 	const char *mnemonic;
@@ -51,7 +52,7 @@ const Opcode page0[0x100] = {
 	{0x15, "DEC D", 1, 4, IMMEDIATE, "Decrement D"},
 	{0x16, "LD D, #%02X", 2, 8, IMMEDIATE, "Load #%02X to D"},
 	{0x17, "RLA", 1, 4, IMMEDIATE, "Rotate A Left"},
-	{0x18, "JR #%02X", 2, 8, RELATIF, "Jump Relatif #%02X"},
+	{0x18, "JR #%02X", 2, 8, RELATIVE, "Jump Relative #%02X"},
 	{0x19, "ADD HL, DE", 1, 8, IMMEDIATE, "Add DE to HL"},
 	{0x1A, "LD A, (DE)", 1, 8, INDIRECT, "Load (DE) to A"},
 	{0x1B, "DEC DE", 1, 8, IMMEDIATE, "Decrement DE"},
@@ -60,7 +61,7 @@ const Opcode page0[0x100] = {
 	{0x1E, "LD E, #%02X", 2, 8, IMMEDIATE, "Load #%02X to E"},
 	{0x1F, "RRA", 1, 4, IMMEDIATE, "Rotate A Right"},
 
-	{0x20, "JR NZ, #%02X", 2, 8, RELATIF, "Jump Relatif #%02X if non-Zero"},
+	{0x20, "JR NZ, #%02X", 2, 8, RELATIVE, "Jump Relative #%02X if non-Zero"},
 	{0x21, "LD HL, #%04X", 3, 12, IMMEDIATE, "Load #%04X to HL"},
 	{0x22, "LD (HL+), A", 1, 8, IMMEDIATE, "Load A to (HL), increment (HL)"},
 	{0x23, "INC HL", 1, 8, IMMEDIATE, "Increment HL"},
@@ -68,7 +69,7 @@ const Opcode page0[0x100] = {
 	{0x25, "DEC H", 1, 4, IMMEDIATE, "Decrement H"},
 	{0x26, "LD H, #%02X", 2, 8, IMMEDIATE, "Load #%02X to H"},
 	{0x27, "DAA", 1, 4, IMMEDIATE, "Decimal Adjust A"},
-	{0x28, "JR Z, #%02X", 2, 8, RELATIF, "Jump Relatif #%02X if Zero"},
+	{0x28, "JR Z, #%02X", 2, 8, RELATIVE, "Jump Relative #%02X if Zero"},
 	{0x29, "ADD HL, HL", 1, 8, IMMEDIATE, "Add HL to HL"},
 	{0x2A, "LD A, (HL+)", 1, 8, INDIRECT, "Load (HL) to A, increment (HL)"},
 	{0x2B, "DEC HL", 1, 8, IMMEDIATE, "Decrement HL"},
@@ -77,7 +78,7 @@ const Opcode page0[0x100] = {
 	{0x2E, "LD L, #%02X", 2, 8, IMMEDIATE, "Load #%02X to L"},
 	{0x2F, "CPL", 1, 4, IMMEDIATE, "Complement A"},
 
-	{0x30, "JR NC, #%02X", 2, 8, RELATIF, "Jump Relatif #%02X if no-Carry"},
+	{0x30, "JR NC, #%02X", 2, 8, RELATIVE, "Jump Relative #%02X if no-Carry"},
 	{0x31, "LD SP, #%04X", 3, 12, IMMEDIATE, "Load #%04X to SP"},
 	{0x32, "LD (HL-), A", 1, 8, IMMEDIATE, "Load A to (HL), decrement (HL)"},
 	{0x33, "INC SP", 1, 8, IMMEDIATE, "Increment SP"},
@@ -85,7 +86,7 @@ const Opcode page0[0x100] = {
 	{0x35, "DEC (HL)", 1, 12, INDIRECT, "Decrement (HL)"},
 	{0x36, "LD (HL), #%02X", 2, 12, IMMEDIATE, "Load #%02X to (HL)"},
 	{0x37, "SCF", 1, 4, IMMEDIATE, "Set Carry Flag"},
-	{0x38, "JR C, #%02X", 2, 8, RELATIF, "Jump Relatif #%02X if Carry"},
+	{0x38, "JR C, #%02X", 2, 8, RELATIVE, "Jump Relative #%02X if Carry"},
 	{0x39, "ADD HL, SP", 1, 8, IMMEDIATE, "Add SP to HL"},
 	{0x3A, "LD A, (HL-)", 1, 8, INDIRECT, "Load #(HL) to A, decrement (HL)"},
 	{0x3B, "DEC SP", 1, 8, IMMEDIATE, "Decrement SP"},
