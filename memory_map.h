@@ -42,6 +42,7 @@ and make the internal RAM one big memory bank
 +---------------------------+---------------+-------+-------------------+
 
 *Size in bytes
+
 */
 
 enum{
@@ -81,6 +82,7 @@ enum{
 #define MEM_IE_REG_OFFSET (0xFFFF)
 
 
+// Memory map structure
 typedef struct{
 	Memory mem; // RAM, ROM, VRAM, ...
 	uint16_t offset; // address offset of memory map
