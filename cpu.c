@@ -579,7 +579,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x7D: // LD A, L
 			case 0x7F: // LD A, A
 				r1 = (opcode & 0x38) >> 3;
-				r2 = (opcode & 0x07) >> 3;
+				r2 = opcode & 0x07;
 				pCpu->reg[r1]->R = pCpu->reg[r2]->R;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
