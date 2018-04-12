@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <SDL2/SDL.h>
+
 #include "vm.h"
 
 int main(int argc, char *argv[]){
@@ -13,6 +15,22 @@ int main(int argc, char *argv[]){
 		0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc,
 		0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e
 	};
+
+	SDL_Window *w = NULL;
+	SDL_Renderer *renderer = NULL;
+	SDL_Event event;
+
+	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+		return -1;
+	w = SDL_CreateWindow("DameGame", 100, 100, 160, 144, SDL_WINDOW_SHOWN);
+	if (!w)
+		return -1;
+
+	renderer = SDL_CreateRenderer(w, -1, 0);
+	SDL_SetRenderDrawColor(renderer, 0xEE, 0xEE, 0xEE, 0xFF);
+	SDL_RenderClear(renderer);
+	SDL_RenderPresent(renderer);
+
 	VM *vm = NULL;
 	vm = vm_Init();
 	if (vm_LoadBios(vm, "bios/bios.gb") != 0){
@@ -34,9 +52,14 @@ int main(int argc, char *argv[]){
 	// Run until bios is disabled -> gets stuck on a wait for vertical blank loop
 	for(i = 0; vm->cpu->sfr->BIOS == 0; i++){
 		cpu_Run(vm->cpu);
+		SDL_PollEvent(&event);
+		if (event.type == SDL_QUIT)
+			break;
 	}
 
 	DEBUG_PRINTF("\nFree stuff & exit\n");
 	vm_Free(vm);
+	SDL_DestroyWindow(w);
+	SDL_Quit();
 	return 0;
 }
