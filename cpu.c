@@ -180,8 +180,19 @@ void cpu_Run(Cpu *pCpu){
 			case 0x13: // INC DE
 			case 0x23: // INC HL
 			case 0x33: // INC SP
-				r1 = ((opcode & 0xF0) >> 4);
+				r1 = ((opcode & 0x30) >> 4);
 				(*pCpu->dreg[r1])++;
+				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
+				break;
+
+			case 0x34: // INC (HL)
+				pCpu->address_bus = pCpu->HL;
+				byte = cpu_GetByte(pCpu);
+				pCpu->FLAG_bits.N = 0;
+				dummy = (pCpu->data_bus & 0x0F) + 1;
+				(*byte) = pCpu->data_bus++;
+				pCpu->FLAG_bits.H = dummy > 0xF;
+				pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
 
@@ -193,21 +204,11 @@ void cpu_Run(Cpu *pCpu){
 			case 0x2C: // INC L
 			case 0x3C: // INC A
 				pCpu->FLAG_bits.N = 0;
-				r1 = ((opcode >> 4) & 0x0F) * 2 + ((opcode & 0x0F) == 0x0C ? 1 : 0);
+				r1 = (opcode & 0x38) >> 3;
 				dummy = (pCpu->reg[r1]->R & 0x0F) + 1;
 				pCpu->reg[r1]->R++;
 				pCpu->FLAG_bits.H = dummy > 0xF;
 				pCpu->FLAG_bits.Z = pCpu->reg[r1]->R == 0;
-				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
-				break;
-			case 0x34: // INC (HL)
-				pCpu->address_bus = pCpu->HL;
-				byte = cpu_GetByte(pCpu);
-				pCpu->FLAG_bits.N = 0;
-				dummy = (pCpu->data_bus & 0x0F) + 1;
-				(*byte) = pCpu->data_bus++;
-				pCpu->FLAG_bits.H = dummy > 0xF;
-				pCpu->FLAG_bits.Z = pCpu->data_bus == 0;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
 
@@ -220,7 +221,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x2D: // DEC L
 			case 0x3D: // DEC A
 				pCpu->FLAG_bits.N = 1;
-				r1 = ((opcode >> 4) & 0x0F) * 2 + ((opcode & 0x0F) == 0x0D ? 1 : 0);
+				r1 = (opcode & 0x38) >> 3;
 				dummy = pCpu->reg[r1]->R & 0x10;
 				pCpu->reg[r1]->R--;
 				pCpu->FLAG_bits.H = dummy == 0x10;
@@ -255,7 +256,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x84: // ADD A, H
 			case 0x85: // ADD A, L
 			case 0x87: // ADD A, A
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.C = (pCpu->reg[r1]->R + pCpu->A) > 0xFF;
 				pCpu->FLAG_bits.H = ((pCpu->reg[r1]->R & 0x0F) + (pCpu->A & 0x0F)) > 0x0F;
@@ -305,7 +306,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x19: // ADD HL, DE
 			case 0x29: // ADD HL, HL
 			case 0x39: // ADD HL, SP
-				r1 = ((opcode & 0xF0) >> 4);
+				r1 = ((opcode & 0x30) >> 4);
 				pCpu->FLAG_bits.N = 0;
 				word = (pCpu->HL & 0xFFF) + ((*pCpu->dreg[r1]) & 0xFFF);
 				pCpu->FLAG_bits.H = word > 0xFFF;
@@ -322,7 +323,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x8C: // ADC A, H
 			case 0x8D: // ADC A, L
 			case 0x8F: // ADC A, A
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 0;
 				dummy = pCpu->FLAG_bits.C;
 				pCpu->FLAG_bits.C = (pCpu->reg[r1]->R + pCpu->A + dummy) > 0xFF;
@@ -351,7 +352,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x94: // SUB H
 			case 0x95: // SUB L
 			case 0x97: // SUB A
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 1;
 				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
 				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->reg[r1]->R & 0x0F);
@@ -391,7 +392,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x9C: // SBC H
 			case 0x9D: // SBC L
 			case 0x9F: // SBC A
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 1;
 				dummy = pCpu->FLAG_bits.C;
 				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
@@ -436,7 +437,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x3E: // LD A, n
 				pCpu->address_bus = pCpu->PC + 1;
 				byte = cpu_GetByte(pCpu);
-				r1 = ((opcode & 0xF0) >> 4) * 2 + ((opcode & 0xF) == 0x0E ? 1 : 0);
+				r1 = (opcode & 0x38) >> 3;
 				pCpu->reg[r1]->R = pCpu->data_bus;
 				DEBUG_PRINTF(page0[opcode].mnemonic, pCpu->data_bus);
 				DEBUG_PRINTF("\t\t");
@@ -459,7 +460,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x11: // LD DE, nn
 			case 0x21: // LD HL, nn
 			case 0x31: // LD SP, nn
-				r1 = ((opcode & 0xF0) >> 4);
+				r1 = (opcode & 0x30) >> 4;
 				pCpu->address_bus = pCpu->PC + 1;
 				word = cpu_GetWordFromPC(pCpu);
 				*pCpu->dreg[r1] = word;
@@ -471,7 +472,7 @@ void cpu_Run(Cpu *pCpu){
 
 			case 0x02: // LD (BC), A
 			case 0x12: // LD (DE), A
-				r1 = ((opcode & 0xF0) >> 4);
+				r1 = (opcode & 0x10) >> 4;
 				pCpu->address_bus = (*pCpu->dreg[r1]);
 				byte = cpu_GetByte(pCpu);
 				(*byte) = pCpu->A;
@@ -508,17 +509,14 @@ void cpu_Run(Cpu *pCpu){
 				break;
 
 			case 0x0A: // LD A, (BC)
-				pCpu->address_bus = pCpu->BC;
-				byte = cpu_GetByte(pCpu);
-				pCpu->A = pCpu->data_bus;
-				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
-				break;
 			case 0x1A: // LD A, (DE)
-				pCpu->address_bus = pCpu->DE;
+				r1 = (opcode & 0x10) >> 4;
+				pCpu->address_bus = (*pCpu->dreg[r1]);
 				byte = cpu_GetByte(pCpu);
 				pCpu->A = pCpu->data_bus;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
+
 			case 0xFA: // LD A, (nn)
 				pCpu->address_bus = pCpu->PC + 1;
 				word = cpu_GetWordFromPC(pCpu);
@@ -531,57 +529,57 @@ void cpu_Run(Cpu *pCpu){
 				DEBUG_PRINTF("\t");
 				break;
 
-			case 0x40: // LD B, B
+			case 0x40: // LD B, B  0100 0000
 			case 0x41: // LD B, C
 			case 0x42: // LD B, D
 			case 0x43: // LD B, E
 			case 0x44: // LD B, H
 			case 0x45: // LD B, L
 			case 0x47: // LD B, A
-			case 0x48: // LD C, B
+			case 0x48: // LD C, B  0100 1000
 			case 0x49: // LD C, C
 			case 0x4A: // LD C, D
 			case 0x4B: // LD C, E
 			case 0x4C: // LD C, H
 			case 0x4D: // LD C, L
 			case 0x4F: // LD C, A
-			case 0x50: // LD D, B
+			case 0x50: // LD D, B  0101 0000
 			case 0x51: // LD D, C
 			case 0x52: // LD D, D
 			case 0x53: // LD D, E
 			case 0x54: // LD D, H
 			case 0x55: // LD D, L
 			case 0x57: // LD D, A
-			case 0x58: // LD E, B
+			case 0x58: // LD E, B  0101 1000
 			case 0x59: // LD E, C
 			case 0x5A: // LD E, D
 			case 0x5B: // LD E, E
 			case 0x5C: // LD E, H
 			case 0x5D: // LD E, L
 			case 0x5F: // LD E, A
-			case 0x60: // LD H, B
+			case 0x60: // LD H, B  0110 0000
 			case 0x61: // LD H, C
 			case 0x62: // LD H, D
 			case 0x63: // LD H, E
 			case 0x64: // LD H, H
 			case 0x65: // LD H, L
 			case 0x67: // LD H, A
-			case 0x68: // LD L, B
+			case 0x68: // LD L, B  0110 1000
 			case 0x69: // LD L, C
 			case 0x6A: // LD L, D
 			case 0x6B: // LD L, E
 			case 0x6C: // LD L, H
 			case 0x6D: // LD L, L
 			case 0x6F: // LD L, A
-			case 0x78: // LD A, B
+			case 0x78: // LD A, B  0111 1000
 			case 0x79: // LD A, C
 			case 0x7A: // LD A, D
 			case 0x7B: // LD A, E
 			case 0x7C: // LD A, H
 			case 0x7D: // LD A, L
 			case 0x7F: // LD A, A
-				r1 = (((opcode & 0xF0) >> 4) - 0x04) * 2 + ((opcode & 0xF) > 0x7 ? 1 : 0);
-				r2 = (opcode & 0x0F) - ((opcode & 0xF) > 0x7 ? 0x08 : 0);
+				r1 = (opcode & 0x38) >> 3;
+				r2 = (opcode & 0x07) >> 3;
 				pCpu->reg[r1]->R = pCpu->reg[r2]->R;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
@@ -592,7 +590,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x73: // LD (HL), E
 			case 0x74: // LD (HL), H
 			case 0x75: // LD (HL), L
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->address_bus = pCpu->HL;
 				byte = cpu_GetByte(pCpu);
 				(*byte) = pCpu->reg[r1]->R;
@@ -606,7 +604,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x66: // LD H, (HL)
 			case 0x6E: // LD L, (HL)
 			case 0x7E: // LD A, (HL)
-				r1 = ((opcode & 0xF0) >> 4) - 0x04 + ((opcode & 0x0F) == 0x0E ? 1 : 0);
+				r1 = (opcode & 0x38) >> 3;
 				pCpu->address_bus = pCpu->HL;
 				byte = cpu_GetByte(pCpu);
 				pCpu->A = pCpu->data_bus;
@@ -697,7 +695,7 @@ void cpu_Run(Cpu *pCpu){
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.C = 0;
 				pCpu->FLAG_bits.H = 1;
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->A &= pCpu->reg[r1]->R;
 				pCpu->FLAG_bits.Z = pCpu->A == 0;
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
@@ -735,7 +733,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xAC: // XOR H
 			case 0xAD: // XOR L
 			case 0xAF: // XOR A
-				r1 = (opcode & 0x0F) - 0x08;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.C = 0;
 				pCpu->FLAG_bits.H = 0;
@@ -775,7 +773,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xB4: // OR H
 			case 0xB5: // OR L
 			case 0xB7: // OR A
-				r1 = opcode & 0x0F;
+				r1 = opcode & 0x07;
 				pCpu->A |= pCpu->reg[r1]->R;
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.C = 0;
@@ -812,7 +810,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xBC: // CP H
 			case 0xBD: // CP L
 			case 0xBF: // CP A
-				r1 = (opcode & 0x0F) - 0x08;
+				r1 = opcode & 0x07;
 				pCpu->FLAG_bits.N = 1;
 				pCpu->FLAG_bits.H = (pCpu->A & 0x0F) < (pCpu->reg[r1]->R & 0x0F);
 				pCpu->FLAG_bits.C = (pCpu->A & 0xF0) < (pCpu->reg[r1]->R & 0xF0);
@@ -1149,7 +1147,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xC1: // POP BC
 			case 0xD1: // POP DE
 			case 0xE1: // POP HL
-				r1 = ((opcode & 0xF0) >> 4) - 0xC;
+				r1 = (opcode & 0x30) >> 4;
 				(*pCpu->dreg[r1]) = cpu_Pop(pCpu);
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
@@ -1162,7 +1160,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xC5: // Push BC
 			case 0xD5: // Push DE
 			case 0xE5: // Push HL
-				r1 = ((opcode & 0xF0) >> 4) - 0xC;
+				r1 = (opcode & 0x30) >> 4;
 				cpu_Push(pCpu, (*pCpu->dreg[r1]));
 				DEBUG_PRINTF("%s\t\t%s\t", page0[opcode].mnemonic, page0[opcode].description);
 				break;
@@ -1422,8 +1420,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0x78: // BIT 7
 				pCpu->FLAG_bits.N = 0;
 				pCpu->FLAG_bits.H = 1;
-				bit = (((opcode & 0xF0) >> 4) - 0x4) * 2;
-				bit = bit + ((opcode & 0x08) ? 1 : 0);
+				bit = (opcode & 0x38) >> 3;
 				mask = 1 << bit;
 				r1 = opcode & 0x07;
 				if (r1 != 0x06)
@@ -1446,8 +1443,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xA8: // RES 5
 			case 0xB0: // RES 6
 			case 0xB8: // RES 7
-				bit = (((opcode & 0xF0) >> 4) - 0x8) * 2;
-				bit = bit + ((opcode & 0x08) ? 1 : 0);
+				bit = opcode & 0x38 >> 3;
 				mask = 1 << bit;
 				r1 = opcode & 0x07;
 				if (r1 != 0x06)
@@ -1470,8 +1466,7 @@ void cpu_Run(Cpu *pCpu){
 			case 0xE8: // SET 5
 			case 0xF0: // SET 6
 			case 0xF8: // SET 7
-				bit = (((opcode & 0xF0) >> 4) - 0xC) * 2;
-				bit = bit + ((opcode & 0x08) ? 1 : 0);
+				bit = opcode & 0x38 >> 3;
 				mask = 1 << bit;
 				r1 = opcode & 0x07;
 				if (r1 != 0x06)
