@@ -17,7 +17,7 @@ int main(int argc, char *argv[]){
 	};
 
 	SDL_Window *w = NULL;
-	SDL_Renderer *renderer = NULL;
+	SDL_Surface *ws = NULL;
 	SDL_Event event;
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -26,10 +26,9 @@ int main(int argc, char *argv[]){
 	if (!w)
 		return -1;
 
-	renderer = SDL_CreateRenderer(w, -1, 0);
-	SDL_SetRenderDrawColor(renderer, 0xEE, 0xEE, 0xEE, 0xFF);
-	SDL_RenderClear(renderer);
-	SDL_RenderPresent(renderer);
+	ws = SDL_GetWindowSurface(w);
+	SDL_FillRect(ws, &ws->clip_rect, 0xFFEEEEEE);
+	SDL_UpdateWindowSurface(w);
 
 	VM *vm = NULL;
 	vm = vm_Init();
@@ -59,6 +58,7 @@ int main(int argc, char *argv[]){
 
 	DEBUG_PRINTF("\nFree stuff & exit\n");
 	vm_Free(vm);
+	SDL_FreeSurface(ws);
 	SDL_DestroyWindow(w);
 	SDL_Quit();
 	return 0;
