@@ -146,8 +146,9 @@ void cpu_Run(Cpu *pCpu){
 	uint8_t jump = 0;
 
 	// TODO: Check for interrupt
+	if (pCpu->halt || pCpu->stop)
+		return;
 
-	// TODO: Use fetch-decode-execute to read opcode and execute instruction
 	// Read opcode first
 	pCpu->address_bus = pCpu->PC;
 	byte = cpu_GetByte(pCpu);
@@ -167,7 +168,6 @@ void cpu_Run(Cpu *pCpu){
 		opcode = pCpu->data_bus;
 	}
 
-	// TODO: Execute all opcodes
 	if (!pCpu->extended){ // page0 opcodes
 		DEBUG_PRINTF("$%04X> %02X\t", pCpu->PC, opcode);
 		switch (opcode){
