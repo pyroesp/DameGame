@@ -9,6 +9,10 @@ VM* vm_Init(void){
 	Memory *RAM = NULL;
 	Memory *Internal_RAM = NULL;
 
+	vm = (VM*)malloc(sizeof(VM));
+	if (!vm)
+		return NULL;
+
 	BIOS = mem_Init(MEM_ROM_BIOS_SIZE, 1, MEM_ROM_BIOS_SIZE);
 	ROM = mem_Init(ROM_SIZE, ROM_BANK_SIZE, ROM_SIZE / ROM_BANK_SIZE);
 	VRAM = mem_Init(MEM_VIDEO_RAM_SIZE, 1, MEM_VIDEO_RAM_SIZE);
@@ -85,8 +89,17 @@ VM* vm_Init(void){
 	// Set IE register
 	cpu_SetInterruptEnableRegister(cpu, &Internal_RAM->data[MEM_IE_REG_OFFSET - MEM_RAM_INTERNAL_OFFSET]);
 
+	// Do SDL stuff
+	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+		return NULL;
+	vm->w = SDL_CreateWindow("DameGame", 100, 100, LCD_WIDTH, LCD_HEIGHT, SDL_WINDOW_SHOWN);
+	if (!vm->w)
+		return NULL;
+	vm->ws = SDL_GetWindowSurface(vm->w);
+	SDL_FillRect(vm->ws, &vm->ws->clip_rect, 0xFF77EE22);
+	SDL_UpdateWindowSurface(vm->w);
+
 	// add all to VM
-	vm = (VM*)malloc(sizeof(VM));
 	vm->BIOS = BIOS;
 	vm->ROM = ROM;
 	vm->VRAM = VRAM;
@@ -97,7 +110,7 @@ VM* vm_Init(void){
 	return vm;
 }
 
-int vm_LoadBios(VM *pVm, char *path){
+int8_t vm_LoadBios(VM *pVm, char *path){
 	uint16_t fsize = 0, bsize = 0;
 	uint8_t *p;
 	FILE *bios = NULL;
@@ -117,11 +130,39 @@ int vm_LoadBios(VM *pVm, char *path){
 	return 0;
 }
 
-void vm_Free(VM *pVm){
+int8_t vm_Run(VM *pVm){
+	uint8_t exit = 0;
+	while (!exit){
+		cpu_Run(pVm->cpu);
+		vm_ReadKeys(pVm);
+
+		// TODO: remove/define magic numbers
+		if(pVm->keys & 0x01)
+			exit = 1;
+	}
+	return 0;
+}
+
+void vm_ReadKeys(VM *pVm){
+	pVm->keys = 0;
+	SDL_PollEvent(&pVm->ev);
+	switch(pVm->ev.type){
+		case SDLK_ESCAPE:
+		case SDL_QUIT:
+			pVm->keys |= 0x01;
+			break;
+	}
+}
+
+void vm_Quit(VM *pVm){
 	mem_Free(pVm->BIOS);
 	mem_Free(pVm->ROM);
 	mem_Free(pVm->VRAM);
 	mem_Free(pVm->RAM);
 	mem_Free(pVm->Internal_RAM);
 	cpu_Free(pVm->cpu);
+
+	SDL_FreeSurface(pVm->ws);
+	SDL_DestroyWindow(pVm->w);
+	SDL_Quit();
 }

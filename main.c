@@ -6,7 +6,6 @@
 #include "vm.h"
 
 int main(int argc, char *argv[]){
-	int i;
 	uint8_t test_logo[48] = { // Nintendo Logo
 		0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b,
 		0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d,
@@ -16,50 +15,25 @@ int main(int argc, char *argv[]){
 		0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e
 	};
 
-	SDL_Window *w = NULL;
-	SDL_Surface *ws = NULL;
-	SDL_Event event;
-
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
-		return -1;
-	w = SDL_CreateWindow("DameGame", 100, 100, 160, 144, SDL_WINDOW_SHOWN);
-	if (!w)
-		return -1;
-
-	ws = SDL_GetWindowSurface(w);
-	SDL_FillRect(ws, &ws->clip_rect, 0xFFEEEEEE);
-	SDL_UpdateWindowSurface(w);
-
 	VM *vm = NULL;
 	vm = vm_Init();
+	if (!vm)
+		return -1;
+
 	if (vm_LoadBios(vm, "bios/bios.gb") != 0){
 		// TODO: Setup cpu and memory as if the bios just executed
 		return -1;
 	}
 
-	// Test if the bios checks the logo correctly
+	// Write logo to ROM at correct location for the bios to check
 	if (mem_WriteMulti(vm->ROM, 0x104, test_logo, 48) == 0x100)
 		return -1;
 
-	// Display bios memory
-	for (i = 1; i < MEM_ROM_BIOS_SIZE + 1; i++){
-		DEBUG_PRINTF("%02X ", vm->BIOS->data[i - 1]);
-		if (i % 16 == 0)
-			DEBUG_PRINTF("\n");
-	}
+	// Run bios
+	vm_Run(vm);
 
-	// Run until bios is disabled -> gets stuck on a wait for vertical blank loop
-	for(i = 0; vm->cpu->sfr->BIOS == 0; i++){
-		cpu_Run(vm->cpu);
-		SDL_PollEvent(&event);
-		if (event.type == SDL_QUIT)
-			break;
-	}
-
+	// Exit
 	DEBUG_PRINTF("\nFree stuff & exit\n");
-	vm_Free(vm);
-	SDL_FreeSurface(ws);
-	SDL_DestroyWindow(w);
-	SDL_Quit();
+	vm_Quit(vm);
 	return 0;
 }
